@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
 
 namespace GateKeeper.Infrastructure.Persistence;
 
@@ -11,13 +12,20 @@ public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Applicati
 {
     public ApplicationDbContext CreateDbContext(string[] args)
     {
+        // Build configuration to read from the Server project's appsettings.json
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "../GateKeeper.Server"))
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.Development.json", optional: true)
+            .Build();
+
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-        
-        // Use a default connection string for design-time operations
-        // This will be overridden at runtime by appsettings.json
-        optionsBuilder.UseSqlServer(
-            "Server=localhost;Database=GateKeeperDb_Dev;Integrated Security=true;TrustServerCertificate=true;MultipleActiveResultSets=true"
-        );
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        optionsBuilder.UseSqlServer(connectionString, sqlOptions =>
+        {
+            sqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
+        });
 
         return new ApplicationDbContext(optionsBuilder.Options);
     }

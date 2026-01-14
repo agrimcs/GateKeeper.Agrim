@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GateKeeper.Application.Clients.DTOs;
 using GateKeeper.Application.Clients.Services;
+using GateKeeper.Application.Common.Interfaces;
 using GateKeeper.Domain.Entities;
 using GateKeeper.Domain.Enums;
 using GateKeeper.Domain.Exceptions;
@@ -18,6 +19,7 @@ public class ClientServiceTests
     private readonly Mock<IClientRepository> _clientRepositoryMock;
     private readonly Mock<IPasswordHasher> _passwordHasherMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IOAuthClientManager> _oauthClientManagerMock;
     private readonly ClientService _clientService;
 
     public ClientServiceTests()
@@ -25,11 +27,13 @@ public class ClientServiceTests
         _clientRepositoryMock = new Mock<IClientRepository>();
         _passwordHasherMock = new Mock<IPasswordHasher>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _oauthClientManagerMock = new Mock<IOAuthClientManager>();
 
         _clientService = new ClientService(
             _clientRepositoryMock.Object,
             _passwordHasherMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _oauthClientManagerMock.Object);
     }
 
     #region RegisterClientAsync Tests
@@ -50,6 +54,10 @@ public class ClientServiceTests
             .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
+        _oauthClientManagerMock
+            .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
         _clientRepositoryMock
             .Setup(x => x.AddAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -57,6 +65,17 @@ public class ClientServiceTests
         _unitOfWorkMock
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+
+        _oauthClientManagerMock
+            .Setup(x => x.RegisterClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         // Act
         var result = await _clientService.RegisterClientAsync(dto);
@@ -72,6 +91,16 @@ public class ClientServiceTests
 
         _clientRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()), Times.Once);
         _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+        // Verify OAuth registration was called
+        _oauthClientManagerMock.Verify(x => x.RegisterClientAsync(
+            "my-public-app",
+            "My Public App",
+            "public",
+            null,
+            It.Is<IEnumerable<string>>(uris => uris.Contains("https://example.com/callback")),
+            It.Is<IEnumerable<string>>(scopes => scopes.Contains("openid") && scopes.Contains("profile")),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -90,6 +119,10 @@ public class ClientServiceTests
             .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
+        _oauthClientManagerMock
+            .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
         _passwordHasherMock
             .Setup(x => x.HashPassword(It.IsAny<string>()))
             .Returns("hashed-secret");
@@ -101,6 +134,17 @@ public class ClientServiceTests
         _unitOfWorkMock
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+
+        _oauthClientManagerMock
+            .Setup(x => x.RegisterClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         // Act
         var result = await _clientService.RegisterClientAsync(dto);
@@ -115,6 +159,16 @@ public class ClientServiceTests
         result.AllowedScopes.Should().BeEquivalentTo("openid", "profile", "email");
 
         _passwordHasherMock.Verify(x => x.HashPassword(It.IsAny<string>()), Times.Once);
+
+        // Verify OAuth registration was called with secret
+        _oauthClientManagerMock.Verify(x => x.RegisterClientAsync(
+            "my-confidential-app",
+            "My Confidential App",
+            "confidential",
+            It.Is<string>(s => !string.IsNullOrEmpty(s)), // Secret should be provided
+            It.Is<IEnumerable<string>>(uris => uris.Contains("https://example.com/callback")),
+            It.Is<IEnumerable<string>>(scopes => scopes.Contains("openid") && scopes.Contains("profile") && scopes.Contains("email")),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -134,6 +188,10 @@ public class ClientServiceTests
             .ReturnsAsync(true)  // First call: client ID exists
             .ReturnsAsync(false); // Second call: unique client ID
 
+        _oauthClientManagerMock
+            .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
         _clientRepositoryMock
             .Setup(x => x.AddAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -142,6 +200,17 @@ public class ClientServiceTests
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
+        _oauthClientManagerMock
+            .Setup(x => x.RegisterClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _clientService.RegisterClientAsync(dto);
 
@@ -149,6 +218,107 @@ public class ClientServiceTests
         result.Should().NotBeNull();
         result.ClientId.Should().StartWith("my-app-");
         result.ClientId.Length.Should().BeGreaterThan("my-app".Length);
+
+        // Verify checked both domain and OAuth existence
+        _clientRepositoryMock.Verify(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task RegisterClientAsync_WhenOAuthClientExists_ShouldGenerateUniqueId()
+    {
+        // Arrange
+        var dto = new RegisterClientDto
+        {
+            DisplayName = "My App",
+            Type = ClientType.Public,
+            RedirectUris = new List<string> { "https://example.com/callback" },
+            AllowedScopes = new List<string> { "openid" }
+        };
+
+        _clientRepositoryMock
+            .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        _oauthClientManagerMock
+            .SetupSequence(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true)  // First call: OAuth client exists
+            .ReturnsAsync(false); // Second call: unique client ID
+
+        _clientRepositoryMock
+            .Setup(x => x.AddAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _unitOfWorkMock
+            .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        _oauthClientManagerMock
+            .Setup(x => x.RegisterClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _clientService.RegisterClientAsync(dto);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.ClientId.Should().StartWith("my-app-");
+
+        // Verify OAuth existence was checked
+        _oauthClientManagerMock.Verify(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task RegisterClientAsync_WhenOAuthRegistrationFails_ShouldPropagateException()
+    {
+        // Arrange
+        var dto = new RegisterClientDto
+        {
+            DisplayName = "My App",
+            Type = ClientType.Public,
+            RedirectUris = new List<string> { "https://example.com/callback" },
+            AllowedScopes = new List<string> { "openid" }
+        };
+
+        _clientRepositoryMock
+            .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        _oauthClientManagerMock
+            .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        _clientRepositoryMock
+            .Setup(x => x.AddAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _unitOfWorkMock
+            .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        _oauthClientManagerMock
+            .Setup(x => x.RegisterClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("OAuth registration failed"));
+
+        // Act
+        Func<Task> act = async () => await _clientService.RegisterClientAsync(dto);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("OAuth registration failed");
     }
 
     [Fact]
@@ -167,6 +337,10 @@ public class ClientServiceTests
             .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
+        _oauthClientManagerMock
+            .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
         _clientRepositoryMock
             .Setup(x => x.AddAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -174,6 +348,17 @@ public class ClientServiceTests
         _unitOfWorkMock
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+
+        _oauthClientManagerMock
+            .Setup(x => x.RegisterClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         // Act
         var result = await _clientService.RegisterClientAsync(dto);
@@ -329,7 +514,7 @@ public class ClientServiceTests
     #region UpdateClientAsync Tests
 
     [Fact]
-    public async Task UpdateClientAsync_WithValidData_ShouldUpdateClient()
+    public async Task UpdateClientAsync_WithValidData_ShouldUpdateClientAndOAuthServer()
     {
         // Arrange
         var clientId = Guid.NewGuid();
@@ -354,6 +539,15 @@ public class ClientServiceTests
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
+        _oauthClientManagerMock
+            .Setup(x => x.UpdateClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _clientService.UpdateClientAsync(clientId, updateDto);
 
@@ -364,6 +558,14 @@ public class ClientServiceTests
             .Which.Should().Be("https://example.com/new-callback");
 
         _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+        // Verify OAuth update was called
+        _oauthClientManagerMock.Verify(x => x.UpdateClientAsync(
+            "test-app",
+            "New Name",
+            It.Is<IEnumerable<string>>(uris => uris.Contains("https://example.com/new-callback")),
+            It.Is<IEnumerable<string>>(scopes => scopes.Contains("openid")),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -386,6 +588,57 @@ public class ClientServiceTests
 
         // Assert
         await act.Should().ThrowAsync<ClientNotFoundException>();
+
+        // Verify OAuth update was not called
+        _oauthClientManagerMock.Verify(x => x.UpdateClientAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<IEnumerable<string>>(),
+            It.IsAny<IEnumerable<string>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateClientAsync_WhenOAuthUpdateFails_ShouldPropagateException()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var redirectUri = RedirectUri.Create("https://example.com/callback");
+        var client = Client.CreatePublic(
+            "Old Name",
+            "test-app",
+            new List<RedirectUri> { redirectUri },
+            new List<string> { "openid" });
+
+        var updateDto = new UpdateClientDto
+        {
+            DisplayName = "New Name",
+            RedirectUris = new List<string> { "https://example.com/new-callback" }
+        };
+
+        _clientRepositoryMock
+            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+
+        _unitOfWorkMock
+            .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        _oauthClientManagerMock
+            .Setup(x => x.UpdateClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("OAuth update failed"));
+
+        // Act
+        Func<Task> act = async () => await _clientService.UpdateClientAsync(clientId, updateDto);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("OAuth update failed");
     }
 
     [Fact]
@@ -404,8 +657,8 @@ public class ClientServiceTests
         var updateDto = new UpdateClientDto
         {
             DisplayName = "Test App",
-            RedirectUris = new List<string> 
-            { 
+            RedirectUris = new List<string>
+            {
                 "https://example.com/callback2",  // Keep this
                 "https://example.com/callback3"   // Add new
             }
@@ -419,6 +672,15 @@ public class ClientServiceTests
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
+        _oauthClientManagerMock
+            .Setup(x => x.UpdateClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _clientService.UpdateClientAsync(clientId, updateDto);
 
@@ -427,6 +689,17 @@ public class ClientServiceTests
         result.RedirectUris.Should().Contain("https://example.com/callback2");
         result.RedirectUris.Should().Contain("https://example.com/callback3");
         result.RedirectUris.Should().NotContain("https://example.com/callback1");
+
+        // Verify OAuth was updated with correct URIs
+        _oauthClientManagerMock.Verify(x => x.UpdateClientAsync(
+            "test-app",
+            "Test App",
+            It.Is<IEnumerable<string>>(uris =>
+                uris.Contains("https://example.com/callback2") &&
+                uris.Contains("https://example.com/callback3") &&
+                !uris.Contains("https://example.com/callback1")),
+            It.IsAny<IEnumerable<string>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion
@@ -434,7 +707,7 @@ public class ClientServiceTests
     #region DeleteClientAsync Tests
 
     [Fact]
-    public async Task DeleteClientAsync_WithExistingClient_ShouldDeleteClient()
+    public async Task DeleteClientAsync_WithExistingClient_ShouldDeleteClientAndOAuthServer()
     {
         // Arrange
         var clientId = Guid.NewGuid();
@@ -457,12 +730,19 @@ public class ClientServiceTests
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
+        _oauthClientManagerMock
+            .Setup(x => x.DeleteClientAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         // Act
         await _clientService.DeleteClientAsync(clientId);
 
         // Assert
         _clientRepositoryMock.Verify(x => x.DeleteAsync(client, It.IsAny<CancellationToken>()), Times.Once);
         _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+        // Verify OAuth deletion was called
+        _oauthClientManagerMock.Verify(x => x.DeleteClientAsync("test-app", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -481,6 +761,110 @@ public class ClientServiceTests
         // Assert
         await act.Should().ThrowAsync<ClientNotFoundException>();
         _clientRepositoryMock.Verify(x => x.DeleteAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // Verify OAuth deletion was not called
+        _oauthClientManagerMock.Verify(x => x.DeleteClientAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteClientAsync_WhenOAuthDeletionFails_ShouldPropagateException()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var redirectUri = RedirectUri.Create("https://example.com/callback");
+        var client = Client.CreatePublic(
+            "Test App",
+            "test-app",
+            new List<RedirectUri> { redirectUri },
+            new List<string> { "openid" });
+
+        _clientRepositoryMock
+            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+
+        _clientRepositoryMock
+            .Setup(x => x.DeleteAsync(client, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _unitOfWorkMock
+            .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        _oauthClientManagerMock
+            .Setup(x => x.DeleteClientAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("OAuth deletion failed"));
+
+        // Act
+        Func<Task> act = async () => await _clientService.DeleteClientAsync(clientId);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("OAuth deletion failed");
+    }
+
+    #endregion
+
+    #region OAuth Integration Tests
+
+    [Fact]
+    public async Task RegisterClientAsync_ShouldSyncBothDomainAndOAuthStorage()
+    {
+        // Arrange
+        var dto = new RegisterClientDto
+        {
+            DisplayName = "Sync Test App",
+            Type = ClientType.Public,
+            RedirectUris = new List<string> { "https://example.com/callback" },
+            AllowedScopes = new List<string> { "openid", "profile" }
+        };
+
+        Client? capturedClient = null;
+
+        _clientRepositoryMock
+            .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        _oauthClientManagerMock
+            .Setup(x => x.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        _clientRepositoryMock
+            .Setup(x => x.AddAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()))
+            .Callback<Client, CancellationToken>((c, _) => capturedClient = c)
+            .Returns(Task.CompletedTask);
+
+        _unitOfWorkMock
+            .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        _oauthClientManagerMock
+            .Setup(x => x.RegisterClientAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _clientService.RegisterClientAsync(dto);
+
+        // Assert
+        capturedClient.Should().NotBeNull();
+
+        // Verify both storage systems were called
+        _clientRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _oauthClientManagerMock.Verify(x => x.RegisterClientAsync(
+            capturedClient!.ClientId,
+            capturedClient.DisplayName,
+            "public",
+            null,
+            It.IsAny<IEnumerable<string>>(),
+            It.IsAny<IEnumerable<string>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion

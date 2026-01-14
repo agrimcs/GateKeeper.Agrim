@@ -1,5 +1,6 @@
 using GateKeeper.Application.Common.Interfaces;
 using GateKeeper.Domain.Interfaces;
+using GateKeeper.Infrastructure.OAuth;
 using GateKeeper.Infrastructure.Persistence;
 using GateKeeper.Infrastructure.Persistence.Repositories;
 using GateKeeper.Infrastructure.Security;
@@ -23,14 +24,14 @@ public static class DependencyInjection
         services.AddDbContext<ApplicationDbContext>(options =>
         {
             var connectionString = configuration.GetConnectionString("DefaultConnection");
-            
+
             options.UseSqlServer(connectionString, sqlOptions =>
             {
                 sqlOptions.EnableRetryOnFailure(
                     maxRetryCount: 3,
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorNumbersToAdd: null);
-                
+
                 sqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
             });
 
@@ -107,6 +108,9 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
 
+        // Register OAuth client manager adapter
+        services.AddScoped<IOAuthClientManager, OpenIddictClientManagerAdapter>();
+
         return services;
     }
 
@@ -118,7 +122,7 @@ public static class DependencyInjection
     {
         using var scope = serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        
+
         if ((await context.Database.GetPendingMigrationsAsync()).Any())
         {
             await context.Database.MigrateAsync();

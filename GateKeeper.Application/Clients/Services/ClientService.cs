@@ -1,4 +1,5 @@
 using GateKeeper.Application.Clients.DTOs;
+using GateKeeper.Application.Common.Interfaces;
 using GateKeeper.Domain.Entities;
 using GateKeeper.Domain.Enums;
 using GateKeeper.Domain.Exceptions;
@@ -9,26 +10,29 @@ namespace GateKeeper.Application.Clients.Services;
 
 /// <summary>
 /// Application service for OAuth client management.
-/// Handles client registration, configuration, and secret management.
+/// Handles client registration in both domain storage and OAuth server.
 /// </summary>
 public class ClientService
 {
     private readonly IClientRepository _clientRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IOAuthClientManager _oauthClientManager;
 
     public ClientService(
         IClientRepository clientRepository,
         IPasswordHasher passwordHasher,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IOAuthClientManager oauthClientManager)
     {
         _clientRepository = clientRepository;
         _passwordHasher = passwordHasher;
         _unitOfWork = unitOfWork;
+        _oauthClientManager = oauthClientManager;
     }
 
     /// <summary>
-    /// Registers a new OAuth client.
+    /// Registers a new OAuth client in both domain storage and OAuth server.
     /// For confidential clients, returns plain-text secret that must be saved by user.
     /// </summary>
     public async Task<ClientResponseDto> RegisterClientAsync(
@@ -38,8 +42,14 @@ public class ClientService
         // Generate unique client ID
         var clientId = GenerateClientId(dto.DisplayName);
 
-        // Check if client ID already exists
+        // Check if client ID already exists in domain storage
         if (await _clientRepository.ExistsAsync(clientId, cancellationToken))
+        {
+            clientId = $"{clientId}-{Guid.NewGuid().ToString()[..8]}";
+        }
+
+        // Check if client ID already exists in OAuth server
+        if (await _oauthClientManager.ExistsAsync(clientId, cancellationToken))
         {
             clientId = $"{clientId}-{Guid.NewGuid().ToString()[..8]}";
         }
@@ -57,8 +67,8 @@ public class ClientService
             // Generate secret for confidential clients
             var secret = ClientSecret.Generate();
             plainTextSecret = secret.HashedValue; // Store plain text to return to user
-            
-            // Hash the secret before storing
+
+            // Hash the secret before storing in domain
             var hashedSecret = ClientSecret.FromHashed(_passwordHasher.HashPassword(plainTextSecret));
 
             client = Client.CreateConfidential(
@@ -78,8 +88,19 @@ public class ClientService
                 dto.AllowedScopes);
         }
 
+        // Save to domain storage
         await _clientRepository.AddAsync(client, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Register with OAuth server (OpenIddict via adapter)
+        await _oauthClientManager.RegisterClientAsync(
+            clientId: client.ClientId,
+            displayName: client.DisplayName,
+            clientType: client.Type == ClientType.Public ? "public" : "confidential",
+            clientSecret: plainTextSecret,
+            redirectUris: client.RedirectUris.Select(u => u.Value),
+            allowedScopes: client.AllowedScopes,
+            cancellationToken: cancellationToken);
 
         return MapToResponseDto(client, plainTextSecret);
     }
@@ -129,7 +150,7 @@ public class ClientService
     }
 
     /// <summary>
-    /// Updates client configuration.
+    /// Updates client configuration in both domain storage and OAuth server.
     /// </summary>
     public async Task<ClientResponseDto> UpdateClientAsync(
         Guid id,
@@ -169,11 +190,19 @@ public class ClientService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        // Update in OAuth server
+        await _oauthClientManager.UpdateClientAsync(
+            clientId: client.ClientId,
+            displayName: client.DisplayName,
+            redirectUris: client.RedirectUris.Select(u => u.Value),
+            allowedScopes: client.AllowedScopes,
+            cancellationToken: cancellationToken);
+
         return MapToResponseDto(client);
     }
 
     /// <summary>
-    /// Deletes a client.
+    /// Deletes a client from both domain storage and OAuth server.
     /// </summary>
     public async Task DeleteClientAsync(
         Guid id,
@@ -185,8 +214,12 @@ public class ClientService
             throw new ClientNotFoundException(id);
         }
 
+        // Delete from domain storage
         await _clientRepository.DeleteAsync(client, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Delete from OAuth server
+        await _oauthClientManager.DeleteClientAsync(client.ClientId, cancellationToken);
     }
 
     private static string GenerateClientId(string displayName)
