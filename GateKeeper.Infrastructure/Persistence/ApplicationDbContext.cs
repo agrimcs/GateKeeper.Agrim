@@ -6,6 +6,7 @@ namespace GateKeeper.Infrastructure.Persistence;
 /// <summary>
 /// Entity Framework Core database context for GateKeeper.
 /// Manages User and Client aggregates with proper configurations.
+/// Includes OpenIddict entities for OAuth2/OIDC functionality.
 /// </summary>
 public class ApplicationDbContext : DbContext
 {
@@ -14,6 +15,7 @@ public class ApplicationDbContext : DbContext
     {
     }
 
+    // Domain entities
     public DbSet<User> Users => Set<User>();
     public DbSet<Client> Clients => Set<Client>();
 
@@ -23,5 +25,8 @@ public class ApplicationDbContext : DbContext
 
         // Apply all configurations from assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+        
+        // Register OpenIddict entities (required for EF Core migrations)
+        modelBuilder.UseOpenIddict();
     }
 }

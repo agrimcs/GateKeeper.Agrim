@@ -50,13 +50,13 @@ public class EmailTests
     }
 
     [Theory]
-    [InlineData(null)]
+    [InlineData(null!)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Create_WithNullOrEmptyEmail_ShouldThrowDomainException(string invalidEmail)
+    public void Create_WithNullOrEmptyEmail_ShouldThrowDomainException(string? invalidEmail)
     {
         // Act
-        Action act = () => Email.Create(invalidEmail);
+        Action act = () => Email.Create(invalidEmail!);
 
         // Assert
         act.Should().Throw<DomainException>()

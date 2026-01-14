@@ -1,6 +1,6 @@
 ---
 description: 'Senior Software Architect specializing in .NET and React systems. Designs complete architectural specifications including API contracts, database schemas, project structure, and design patterns.'
-tools: ['read', 'edit/createDirectory', 'search', 'web', 'agent', 'todo']
+tools: ['read', 'edit/createDirectory', 'edit/createFile', 'edit/editFiles', 'search', 'web', 'agent', 'todo']
 
 model: Claude Sonnet 4.5 (copilot)
 ---

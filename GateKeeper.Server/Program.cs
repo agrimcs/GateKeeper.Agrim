@@ -1,19 +1,84 @@
+using GateKeeper.Application.Users.Services;
+using GateKeeper.Application.Clients.Services;
+using GateKeeper.Application.Users.Validators;
+using GateKeeper.Domain.Interfaces;
+using GateKeeper.Infrastructure;
+using GateKeeper.Infrastructure.Persistence;
+using GateKeeper.Server.Middleware;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using Microsoft.EntityFrameworkCore;
 
 namespace GateKeeper.Server
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Add services to the container.
+            // Add Infrastructure layer (includes DbContext, Repositories, OpenIddict)
+            builder.Services.AddInfrastructure(builder.Configuration);
 
+            // Add Application layer services
+            builder.Services.AddScoped<UserService>();
+            builder.Services.AddScoped<ClientService>();
+
+            // Add controllers with FluentValidation
             builder.Services.AddControllers();
+            
+            // Register FluentValidation automatic validation
+            builder.Services.AddFluentValidationAutoValidation();
+            builder.Services.AddValidatorsFromAssemblyContaining<RegisterUserDtoValidator>();
+
+            // Configure CORS for React frontend
+            builder.Services.AddCors(options =>
+            {
+                options.AddDefaultPolicy(policy =>
+                {
+                    policy.WithOrigins("http://localhost:5173", "https://localhost:5173") // Vite dev server
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials();
+                });
+            });
+
+            // JWT Authentication
+            builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                        ValidAudience = builder.Configuration["Jwt:Audience"],
+                        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
+                            System.Text.Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"]!)),
+                        ClockSkew = TimeSpan.Zero
+                    };
+                });
+
+            // Add authorization
+            builder.Services.AddAuthorization();
+
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
 
             var app = builder.Build();
+
+            // Apply migrations automatically and seed initial data
+            using (var scope = app.Services.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                await dbContext.Database.MigrateAsync();
+                
+                // Seed initial data for development (only runs if DB is empty)
+                var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+                await ApplicationDbContextSeed.SeedAsync(dbContext, passwordHasher);
+            }
 
             app.UseDefaultFiles();
             app.MapStaticAssets();
@@ -24,16 +89,26 @@ namespace GateKeeper.Server
                 app.MapOpenApi();
             }
 
+            // Global exception handling
+            app.UseMiddleware<ExceptionHandlingMiddleware>();
+
             app.UseHttpsRedirection();
 
-            app.UseAuthorization();
+            app.UseCors(); // Enable CORS
 
+            app.UseStaticFiles(); // For React build files
+
+            app.UseRouting();
+
+            app.UseAuthentication(); // Must come before Authorization
+            app.UseAuthorization();
 
             app.MapControllers();
 
+            // Fallback to React app for client-side routing
             app.MapFallbackToFile("/index.html");
 
-            app.Run();
+            await app.RunAsync();
         }
     }
 }

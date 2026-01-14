@@ -1,3 +1,4 @@
+using GateKeeper.Application.Common.Interfaces;
 using GateKeeper.Domain.Interfaces;
 using GateKeeper.Infrastructure.Persistence;
 using GateKeeper.Infrastructure.Persistence.Repositories;
@@ -39,7 +40,61 @@ public static class DependencyInjection
             {
                 options.EnableSensitiveDataLogging();
             }
+
+            // Suppress pending model changes warning (for development)
+            options.ConfigureWarnings(warnings =>
+            {
+                warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
+            });
+
+            // OpenIddict requires DbContext to be configured
+            options.UseOpenIddict();
         });
+
+        // OpenIddict configuration
+        services.AddOpenIddict()
+            .AddCore(options =>
+            {
+                options.UseEntityFrameworkCore()
+                    .UseDbContext<ApplicationDbContext>();
+            })
+            .AddServer(options =>
+            {
+                // Enable the authorization and token endpoints
+                options.SetAuthorizationEndpointUris("/connect/authorize")
+                       .SetTokenEndpointUris("/connect/token")
+                       .SetUserinfoEndpointUris("/connect/userinfo");
+
+                // Enable flows
+                options.AllowAuthorizationCodeFlow()
+                       .AllowRefreshTokenFlow();
+
+                // Require PKCE for public clients
+                options.RequireProofKeyForCodeExchange();
+
+                // Register scopes (permissions)
+                options.RegisterScopes("openid", "profile", "email", "offline_access");
+
+                // Configure token lifetimes
+                options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15))
+                       .SetAuthorizationCodeLifetime(TimeSpan.FromMinutes(5))
+                       .SetRefreshTokenLifetime(TimeSpan.FromDays(30));
+
+                // Register signing and encryption credentials
+                options.AddDevelopmentEncryptionCertificate()
+                       .AddDevelopmentSigningCertificate();
+
+                // Register ASP.NET Core host
+                options.UseAspNetCore()
+                       .EnableAuthorizationEndpointPassthrough()
+                       .EnableTokenEndpointPassthrough()
+                       .EnableUserinfoEndpointPassthrough();
+            })
+            .AddValidation(options =>
+            {
+                options.UseLocalServer();
+                options.UseAspNetCore();
+            });
 
         // Register repositories
         services.AddScoped<IUserRepository, UserRepository>();
@@ -50,6 +105,7 @@ public static class DependencyInjection
 
         // Register security services
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
+        services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
 
         return services;
     }

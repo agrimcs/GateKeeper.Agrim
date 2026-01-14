@@ -74,13 +74,23 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
 
         // Allowed scopes as JSON array or separate table
         // Simple approach: store as comma-separated string for MVP
-        builder.Property(c => c.AllowedScopes)
+        builder.Property<List<string>>("_allowedScopes")
+            .HasField("_allowedScopes")
             .HasConversion(
                 v => string.Join(',', v),
                 v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
             )
             .HasColumnName("AllowedScopes")
             .HasMaxLength(1000);
+
+        builder.Property<List<string>>("_allowedScopes")
+            .Metadata.SetValueComparer(
+                new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<string>>(
+                    (c1, c2) => c1!.SequenceEqual(c2!),
+                    c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                    c => c.ToList()
+                )
+            );
 
         // Timestamps
         builder.Property(c => c.CreatedAt)

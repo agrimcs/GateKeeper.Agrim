@@ -1,0 +1,643 @@
+{
+	"info": {
+		"_postman_id": "gatekeeper-api-collection",
+		"name": "GateKeeper API",
+		"description": "Complete API collection for GateKeeper OAuth2/OIDC Server",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "register"]
+						},
+						"description": "Register a new user account"
+					},
+					"response": []
+				},
+				{
+					"name": "Login User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Auto-save JWT token to environment variable",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"jwtToken\", jsonData.token);",
+									"    pm.collectionVariables.set(\"userId\", jsonData.user.id);",
+									"    console.log(\"JWT Token saved: \" + jsonData.token);",
+									"    console.log(\"User ID saved: \" + jsonData.user.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login with email and password. Returns JWT token that is auto-saved to {{jwtToken}} variable."
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/profile/{{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "profile", "{{userId}}"]
+						},
+						"description": "Get user profile by ID. Requires JWT authentication."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Get All Users",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users?skip=0&take=50",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users"],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "take",
+									"value": "50"
+								}
+							]
+						},
+						"description": "Get all users with pagination. Requires JWT authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Get User By ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/{{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "{{userId}}"]
+						},
+						"description": "Get specific user by ID. Requires JWT authentication."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "OAuth Clients",
+			"item": [
+				{
+					"name": "Get All Clients",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/clients?skip=0&take=50",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "clients"],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "take",
+									"value": "50"
+								}
+							]
+						},
+						"description": "Get all OAuth clients with pagination. Requires JWT authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Client By ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/clients/{{clientId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "clients", "{{clientId}}"]
+						},
+						"description": "Get specific OAuth client by ID. Requires JWT authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Register Public Client",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Auto-save client IDs to variables",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"clientId\", jsonData.id);",
+									"    pm.collectionVariables.set(\"oauthClientId\", jsonData.clientId);",
+									"    console.log(\"Client GUID saved: \" + jsonData.id);",
+									"    console.log(\"OAuth Client ID saved: \" + jsonData.clientId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"displayName\": \"My React App\",\n  \"type\": \"Public\",\n  \"redirectUris\": [\n    \"http://localhost:5173/callback\",\n    \"http://localhost:5173/silent-renew\"\n  ],\n  \"allowedScopes\": [\"openid\", \"profile\", \"email\", \"offline_access\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/clients",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "clients"]
+						},
+						"description": "Register a new public OAuth client (no secret required). Requires JWT authentication. Auto-saves clientId and oauthClientId."
+					},
+					"response": []
+				},
+				{
+					"name": "Register Confidential Client",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Auto-save client IDs to variables",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"clientId\", jsonData.id);",
+									"    pm.collectionVariables.set(\"oauthClientId\", jsonData.clientId);",
+									"    console.log(\"Client GUID saved: \" + jsonData.id);",
+									"    console.log(\"OAuth Client ID saved: \" + jsonData.clientId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"displayName\": \"My Server App\",\n  \"type\": \"Confidential\",\n  \"redirectUris\": [\n    \"https://myapp.example.com/callback\"\n  ],\n  \"allowedScopes\": [\"openid\", \"profile\", \"email\"],\n  \"secret\": \"my-super-secret-key-12345\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/clients",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "clients"]
+						},
+						"description": "Register a new confidential OAuth client (with secret). Requires JWT authentication. Auto-saves clientId and oauthClientId."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Client",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"displayName\": \"My Updated App\",\n  \"redirectUris\": [\n    \"http://localhost:5173/callback\",\n    \"http://localhost:5173/silent-renew\",\n    \"http://localhost:3000/callback\"\n  ],\n  \"allowedScopes\": [\"openid\", \"profile\", \"email\", \"offline_access\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/clients/{{clientId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "clients", "{{clientId}}"]
+						},
+						"description": "Update existing OAuth client. Requires JWT authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Client",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/clients/{{clientId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "clients", "{{clientId}}"]
+						},
+						"description": "Delete an OAuth client. Requires JWT authentication."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "OpenIddict / OAuth2",
+			"item": [
+				{
+					"name": "Discovery Document",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/.well-known/openid-configuration",
+							"host": ["{{baseUrl}}"],
+							"path": [".well-known", "openid-configuration"]
+						},
+						"description": "Get OpenID Connect discovery document"
+					},
+					"response": []
+				},
+				{
+					"name": "Authorization Endpoint",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwtToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/connect/authorize?client_id={{oauthClientId}}&redirect_uri={{redirectUri}}&response_type=code&scope=openid profile email&code_challenge={{codeChallenge}}&code_challenge_method=S256&state=random_state_string",
+							"host": ["{{baseUrl}}"],
+							"path": ["connect", "authorize"],
+							"query": [
+								{
+									"key": "client_id",
+									"value": "{{oauthClientId}}",
+									"description": "OAuth Client ID from client registration"
+								},
+								{
+									"key": "redirect_uri",
+									"value": "{{redirectUri}}",
+									"description": "One of the registered redirect URIs"
+								},
+								{
+									"key": "response_type",
+									"value": "code"
+								},
+								{
+									"key": "scope",
+									"value": "openid profile email"
+								},
+								{
+									"key": "code_challenge",
+									"value": "{{codeChallenge}}",
+									"description": "PKCE code challenge (SHA256 of verifier)"
+								},
+								{
+									"key": "code_challenge_method",
+									"value": "S256"
+								},
+								{
+									"key": "state",
+									"value": "random_state_string",
+									"description": "Random state for CSRF protection"
+								}
+							]
+						},
+						"description": "OAuth2 authorization endpoint. Requires JWT authentication (user must be logged in). Returns authorization code for token exchange."
+					},
+					"response": []
+				},
+				{
+					"name": "Token Endpoint",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "authorization_code",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "{{oauthClientId}}",
+									"type": "text",
+									"description": "OAuth Client ID"
+								},
+								{
+									"key": "code",
+									"value": "{{authorizationCode}}",
+									"type": "text",
+									"description": "Authorization code from authorize endpoint"
+								},
+								{
+									"key": "redirect_uri",
+									"value": "{{redirectUri}}",
+									"type": "text"
+								},
+								{
+									"key": "code_verifier",
+									"value": "{{codeVerifier}}",
+									"type": "text",
+									"description": "PKCE code verifier"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/connect/token",
+							"host": ["{{baseUrl}}"],
+							"path": ["connect", "token"]
+						},
+						"description": "Exchange authorization code for access token"
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "refresh_token",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "{{oauthClientId}}",
+									"type": "text"
+								},
+								{
+									"key": "refresh_token",
+									"value": "{{refreshToken}}",
+									"type": "text",
+									"description": "Refresh token from previous token response"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/connect/token",
+							"host": ["{{baseUrl}}"],
+							"path": ["connect", "token"]
+						},
+						"description": "Get new access token using refresh token"
+					},
+					"response": []
+				},
+				{
+					"name": "UserInfo Endpoint",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "Access token from token endpoint"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/connect/userinfo",
+							"host": ["{{baseUrl}}"],
+							"path": ["connect", "userinfo"]
+						},
+						"description": "Get user claims using access token"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5294",
+			"type": "string"
+		},
+		{
+			"key": "jwtToken",
+			"value": "",
+			"type": "string",
+			"description": "JWT Bearer token from login response (auto-populated)"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string",
+			"description": "User ID from registration/login response"
+		},
+		{
+			"key": "clientId",
+			"value": "",
+			"type": "string",
+			"description": "Client GUID from client registration"
+		},
+		{
+			"key": "oauthClientId",
+			"value": "",
+			"type": "string",
+			"description": "OAuth Client ID (string) from client registration"
+		},
+		{
+			"key": "redirectUri",
+			"value": "http://localhost:5173/callback",
+			"type": "string"
+		},
+		{
+			"key": "codeChallenge",
+			"value": "",
+			"type": "string",
+			"description": "PKCE code challenge (base64url SHA256 of verifier)"
+		},
+		{
+			"key": "codeVerifier",
+			"value": "",
+			"type": "string",
+			"description": "PKCE code verifier (random string)"
+		},
+		{
+			"key": "authorizationCode",
+			"value": "",
+			"type": "string",
+			"description": "Authorization code from authorize endpoint"
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"type": "string",
+			"description": "Access token from token endpoint"
+		},
+		{
+			"key": "refreshToken",
+			"value": "",
+			"type": "string",
+			"description": "Refresh token from token endpoint"
+		}
+	]
+}

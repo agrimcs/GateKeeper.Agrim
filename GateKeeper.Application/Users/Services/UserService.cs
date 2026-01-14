@@ -1,4 +1,5 @@
 using GateKeeper.Application.Common.Exceptions;
+using GateKeeper.Application.Common.Interfaces;
 using GateKeeper.Application.Users.DTOs;
 using GateKeeper.Domain.Entities;
 using GateKeeper.Domain.Exceptions;
@@ -16,15 +17,18 @@ public class UserService
     private readonly IUserRepository _userRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IJwtTokenGenerator _jwtTokenGenerator;
 
     public UserService(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IJwtTokenGenerator jwtTokenGenerator)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _unitOfWork = unitOfWork;
+        _jwtTokenGenerator = jwtTokenGenerator;
     }
 
     /// <summary>
@@ -60,7 +64,7 @@ public class UserService
     /// <summary>
     /// Authenticates a user with email and password.
     /// </summary>
-    public async Task<UserProfileDto> LoginAsync(
+    public async Task<LoginResponseDto> LoginAsync(
         LoginUserDto dto, 
         CancellationToken cancellationToken = default)
     {
@@ -83,7 +87,19 @@ public class UserService
         user.RecordLogin();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return MapToProfileDto(user);
+        // Generate JWT token
+        var token = _jwtTokenGenerator.GenerateToken(
+            user.Id,
+            user.Email.Value,
+            user.FirstName,
+            user.LastName
+        );
+
+        return new LoginResponseDto
+        {
+            Token = token,
+            User = MapToProfileDto(user)
+        };
     }
 
     /// <summary>

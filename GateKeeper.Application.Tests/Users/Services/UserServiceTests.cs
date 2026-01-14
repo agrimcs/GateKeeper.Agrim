@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GateKeeper.Application.Common.Exceptions;
+using GateKeeper.Application.Common.Interfaces;
 using GateKeeper.Application.Users.DTOs;
 using GateKeeper.Application.Users.Services;
 using GateKeeper.Domain.Entities;
@@ -19,6 +20,7 @@ public class UserServiceTests
     private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<IPasswordHasher> _passwordHasherMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IJwtTokenGenerator> _jwtTokenGeneratorMock;
     private readonly UserService _userService;
 
     public UserServiceTests()
@@ -26,11 +28,13 @@ public class UserServiceTests
         _userRepositoryMock = new Mock<IUserRepository>();
         _passwordHasherMock = new Mock<IPasswordHasher>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _jwtTokenGeneratorMock = new Mock<IJwtTokenGenerator>();
 
         _userService = new UserService(
             _userRepositoryMock.Object,
             _passwordHasherMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _jwtTokenGeneratorMock.Object);
     }
 
     #region RegisterAsync Tests
@@ -153,15 +157,21 @@ public class UserServiceTests
         _unitOfWorkMock
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+            
+        _jwtTokenGeneratorMock
+            .Setup(x => x.GenerateToken(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns("test-jwt-token");
 
         // Act
         var result = await _userService.LoginAsync(dto);
 
         // Assert
         result.Should().NotBeNull();
-        result.Email.Should().Be(dto.Email.ToLowerInvariant());
-        result.Id.Should().Be(user.Id);
-        result.LastLoginAt.Should().NotBeNull();
+        result.Token.Should().Be("test-jwt-token");
+        result.User.Should().NotBeNull();
+        result.User.Email.Should().Be(dto.Email.ToLowerInvariant());
+        result.User.Id.Should().Be(user.Id);
+        result.User.LastLoginAt.Should().NotBeNull();
 
         _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
