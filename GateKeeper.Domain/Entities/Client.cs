@@ -17,6 +17,7 @@ public class Client : AggregateRoot
     public ClientSecret? Secret { get; private set; }
     public string DisplayName { get; private set; } = string.Empty;
     public ClientType Type { get; private set; }
+    public Guid OwnerId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     
     private readonly List<RedirectUri> _redirectUris = new();
@@ -33,12 +34,14 @@ public class Client : AggregateRoot
         string clientId,
         string displayName,
         ClientType type,
+        Guid ownerId,
         ClientSecret? secret = null)
     {
         Id = id;
         ClientId = clientId;
         DisplayName = displayName;
         Type = type;
+        OwnerId = ownerId;
         Secret = secret;
         CreatedAt = DateTime.UtcNow;
     }
@@ -52,6 +55,7 @@ public class Client : AggregateRoot
         string displayName,
         string clientId,
         ClientSecret secret,
+        Guid ownerId,
         IEnumerable<RedirectUri> redirectUris,
         IEnumerable<string> scopes)
     {
@@ -61,7 +65,7 @@ public class Client : AggregateRoot
         if (string.IsNullOrWhiteSpace(clientId))
             throw new DomainException("Client ID is required");
         
-        var client = new Client(Guid.NewGuid(), clientId, displayName, ClientType.Confidential, secret);
+        var client = new Client(Guid.NewGuid(), clientId, displayName, ClientType.Confidential, ownerId, secret);
         
         foreach (var uri in redirectUris)
             client._redirectUris.Add(uri);
@@ -82,6 +86,7 @@ public class Client : AggregateRoot
     public static Client CreatePublic(
         string displayName,
         string clientId,
+        Guid ownerId,
         IEnumerable<RedirectUri> redirectUris,
         IEnumerable<string> scopes)
     {
@@ -91,7 +96,7 @@ public class Client : AggregateRoot
         if (string.IsNullOrWhiteSpace(clientId))
             throw new DomainException("Client ID is required");
         
-        var client = new Client(Guid.NewGuid(), clientId, displayName, ClientType.Public);
+        var client = new Client(Guid.NewGuid(), clientId, displayName, ClientType.Public, ownerId);
         
         foreach (var uri in redirectUris)
             client._redirectUris.Add(uri);
@@ -136,5 +141,14 @@ public class Client : AggregateRoot
             throw new DomainException("Display name cannot be empty");
         
         DisplayName = displayName;
+    }
+    
+    /// <summary>
+    /// Validates if the client is owned by the specified user.
+    /// Used for authorization checks before operations.
+    /// </summary>
+    public bool IsOwnedBy(Guid userId)
+    {
+        return OwnerId == userId;
     }
 }

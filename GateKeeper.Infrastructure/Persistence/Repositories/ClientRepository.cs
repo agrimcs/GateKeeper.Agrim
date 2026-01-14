@@ -31,18 +31,29 @@ public class ClientRepository : IClientRepository
             .FirstOrDefaultAsync(c => c.ClientId == clientId, cancellationToken);
     }
 
+    public async Task<Client?> GetByIdAndOwnerAsync(
+        Guid id,
+        Guid ownerId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Clients
+            .FirstOrDefaultAsync(c => c.Id == id && c.OwnerId == ownerId, cancellationToken);
+    }
+
     public async Task<bool> ExistsAsync(string clientId, CancellationToken cancellationToken = default)
     {
         return await _context.Clients
             .AnyAsync(c => c.ClientId == clientId, cancellationToken);
     }
 
-    public async Task<List<Client>> GetAllAsync(
+    public async Task<List<Client>> GetAllByOwnerAsync(
+        Guid ownerId,
         int skip = 0,
         int take = 50,
         CancellationToken cancellationToken = default)
     {
         return await _context.Clients
+            .Where(c => c.OwnerId == ownerId)
             .OrderByDescending(c => c.CreatedAt)
             .Skip(skip)
             .Take(take)

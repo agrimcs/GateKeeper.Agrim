@@ -37,6 +37,7 @@ public class ClientService
     /// </summary>
     public async Task<ClientResponseDto> RegisterClientAsync(
         RegisterClientDto dto,
+        Guid ownerId,
         CancellationToken cancellationToken = default)
     {
         // Generate unique client ID
@@ -75,6 +76,7 @@ public class ClientService
                 dto.DisplayName,
                 clientId,
                 hashedSecret,
+                ownerId,
                 redirectUris,
                 dto.AllowedScopes);
         }
@@ -84,6 +86,7 @@ public class ClientService
             client = Client.CreatePublic(
                 dto.DisplayName,
                 clientId,
+                ownerId,
                 redirectUris,
                 dto.AllowedScopes);
         }
@@ -106,13 +109,14 @@ public class ClientService
     }
 
     /// <summary>
-    /// Gets a client by ID.
+    /// Gets a client by ID. Only returns if owned by the specified user.
     /// </summary>
     public async Task<ClientResponseDto> GetClientByIdAsync(
         Guid id,
+        Guid ownerId,
         CancellationToken cancellationToken = default)
     {
-        var client = await _clientRepository.GetByIdAsync(id, cancellationToken);
+        var client = await _clientRepository.GetByIdAndOwnerAsync(id, ownerId, cancellationToken);
         if (client == null)
         {
             throw new ClientNotFoundException(id);
@@ -138,26 +142,29 @@ public class ClientService
     }
 
     /// <summary>
-    /// Gets all registered clients with pagination.
+    /// Gets all registered clients owned by the specified user with pagination.
     /// </summary>
     public async Task<List<ClientResponseDto>> GetAllClientsAsync(
+        Guid ownerId,
         int skip = 0,
         int take = 50,
         CancellationToken cancellationToken = default)
     {
-        var clients = await _clientRepository.GetAllAsync(skip, take, cancellationToken);
+        var clients = await _clientRepository.GetAllByOwnerAsync(ownerId, skip, take, cancellationToken);
         return clients.Select(c => MapToResponseDto(c)).ToList();
     }
 
     /// <summary>
     /// Updates client configuration in both domain storage and OAuth server.
+    /// Only allows update if the client is owned by the specified user.
     /// </summary>
     public async Task<ClientResponseDto> UpdateClientAsync(
         Guid id,
         UpdateClientDto dto,
+        Guid ownerId,
         CancellationToken cancellationToken = default)
     {
-        var client = await _clientRepository.GetByIdAsync(id, cancellationToken);
+        var client = await _clientRepository.GetByIdAndOwnerAsync(id, ownerId, cancellationToken);
         if (client == null)
         {
             throw new ClientNotFoundException(id);
@@ -203,12 +210,14 @@ public class ClientService
 
     /// <summary>
     /// Deletes a client from both domain storage and OAuth server.
+    /// Only allows deletion if the client is owned by the specified user.
     /// </summary>
     public async Task DeleteClientAsync(
         Guid id,
+        Guid ownerId,
         CancellationToken cancellationToken = default)
     {
-        var client = await _clientRepository.GetByIdAsync(id, cancellationToken);
+        var client = await _clientRepository.GetByIdAndOwnerAsync(id, ownerId, cancellationToken);
         if (client == null)
         {
             throw new ClientNotFoundException(id);

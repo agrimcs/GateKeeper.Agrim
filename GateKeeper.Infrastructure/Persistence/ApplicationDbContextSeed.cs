@@ -48,10 +48,11 @@ public static class ApplicationDbContextSeed
 
         await context.Users.AddAsync(testUser);
 
-        // Seed demo public client (for testing OAuth flow)
+        // Seed demo public client (for testing OAuth flow) - owned by admin
         var demoPublicClient = Client.CreatePublic(
             "Demo Public App",
             "demo-public-app",
+            adminUser.Id,
             new List<RedirectUri>
             {
                 RedirectUri.Create("https://oauth.pstmn.io/v1/callback"), // Postman OAuth
@@ -62,7 +63,7 @@ public static class ApplicationDbContextSeed
 
         await context.Clients.AddAsync(demoPublicClient);
 
-        // Seed demo confidential client
+        // Seed demo confidential client - owned by admin
         var secret = ClientSecret.Generate();
         var hashedSecret = ClientSecret.FromHashed(
             passwordHasher.HashPassword(secret.HashedValue)
@@ -72,6 +73,7 @@ public static class ApplicationDbContextSeed
             "Demo Confidential App",
             "demo-confidential-app",
             hashedSecret,
+            adminUser.Id,
             new List<RedirectUri>
             {
                 RedirectUri.Create("https://localhost:5001/callback")

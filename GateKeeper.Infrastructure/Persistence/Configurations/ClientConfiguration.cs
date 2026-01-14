@@ -40,6 +40,20 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
             .HasConversion<string>() // Store as string in DB for readability
             .HasMaxLength(20);
 
+        // Owner foreign key
+        builder.Property(c => c.OwnerId)
+            .IsRequired();
+
+        // Foreign key relationship to User
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(c => c.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Index on OwnerId for filtering queries
+        builder.HasIndex(c => c.OwnerId)
+            .HasDatabaseName("IX_Clients_OwnerId");
+
         // Client secret value object
         builder.OwnsOne(c => c.Secret, secret =>
         {

@@ -2,6 +2,7 @@ using GateKeeper.Application.Clients.DTOs;
 using GateKeeper.Application.Clients.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace GateKeeper.Server.Controllers;
 
@@ -18,12 +19,26 @@ public class ClientsController : ControllerBase
     }
 
     /// <summary>
+    /// Helper to get current user ID from JWT claims
+    /// </summary>
+    private Guid GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst("sub") ?? User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+        {
+            throw new UnauthorizedAccessException("User ID not found in token");
+        }
+        return userId;
+    }
+
+    /// <summary>
     /// Get all OAuth clients
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 50)
     {
-        var clients = await _clientService.GetAllClientsAsync(skip, take);
+        var ownerId = GetCurrentUserId();
+        var clients = await _clientService.GetAllClientsAsync(ownerId, skip, take);
         return Ok(clients);
     }
 
@@ -33,7 +48,8 @@ public class ClientsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var client = await _clientService.GetClientByIdAsync(id);
+        var ownerId = GetCurrentUserId();
+        var client = await _clientService.GetClientByIdAsync(id, ownerId);
         return Ok(client);
     }
 
@@ -43,7 +59,8 @@ public class ClientsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Register([FromBody] RegisterClientDto dto)
     {
-        var client = await _clientService.RegisterClientAsync(dto);
+        var ownerId = GetCurrentUserId();
+        var client = await _clientService.RegisterClientAsync(dto, ownerId);
         return CreatedAtAction(nameof(GetById), new { id = client.Id }, client);
     }
 
@@ -53,7 +70,8 @@ public class ClientsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateClientDto dto)
     {
-        var client = await _clientService.UpdateClientAsync(id, dto);
+        var ownerId = GetCurrentUserId();
+        var client = await _clientService.UpdateClientAsync(id, dto, ownerId);
         return Ok(client);
     }
 
@@ -63,7 +81,8 @@ public class ClientsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await _clientService.DeleteClientAsync(id);
+        var ownerId = GetCurrentUserId();
+        await _clientService.DeleteClientAsync(id, ownerId);
         return NoContent();
     }
 }
