@@ -74,8 +74,6 @@ public class EmailTests
     [InlineData("user@.com")]               // Missing domain
     [InlineData("user@domain.")]            // Missing TLD
     [InlineData("user@domain..com")]        // Double dot
-    [InlineData("")]                        // Empty
-    [InlineData("   ")]                     // Whitespace only
     public void Create_WithInvalidEmailFormat_ShouldThrowDomainException(string invalidEmail)
     {
         // Act
@@ -84,6 +82,19 @@ public class EmailTests
         // Assert
         act.Should().Throw<DomainException>()
             .WithMessage("*Invalid email format*");
+    }
+
+    [Theory]
+    [InlineData("")]                        // Empty
+    [InlineData("   ")]                     // Whitespace only
+    public void Create_WithEmptyEmail_ShouldThrowDomainException(string invalidEmail)
+    {
+        // Act
+        Action act = () => Email.Create(invalidEmail);
+
+        // Assert
+        act.Should().Throw<DomainException>()
+            .WithMessage("*Email cannot be empty*");
     }
 
     [Fact]
