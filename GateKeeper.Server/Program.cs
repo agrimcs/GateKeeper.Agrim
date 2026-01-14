@@ -36,7 +36,12 @@ namespace GateKeeper.Server
             {
                 options.AddDefaultPolicy(policy =>
                 {
-                    policy.WithOrigins("http://localhost:5173", "https://localhost:5173") // Vite dev server
+                    policy.WithOrigins(
+                              "http://localhost:5173", 
+                              "https://localhost:5173",
+                              "http://localhost:63461",
+                              "https://localhost:63461",
+                              "https://localhost:63462") // Vite dev server (multiple ports)
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();
