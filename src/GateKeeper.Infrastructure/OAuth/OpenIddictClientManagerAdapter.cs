@@ -25,6 +25,7 @@ public class OpenIddictClientManagerAdapter : IOAuthClientManager
         string? clientSecret,
         IEnumerable<string> redirectUris,
         IEnumerable<string> allowedScopes,
+        Guid? tenantId = null,
         CancellationToken cancellationToken = default)
     {
         var descriptor = new OpenIddictApplicationDescriptor
@@ -66,6 +67,14 @@ public class OpenIddictClientManagerAdapter : IOAuthClientManager
         }
 
         // Create application in OpenIddict
+        if (tenantId.HasValue)
+        {
+            // Persist tenant metadata in application properties so we can enforce
+            // tenant isolation when resolving clients.
+            var json = System.Text.Json.JsonSerializer.SerializeToElement(tenantId.Value.ToString());
+            descriptor.Properties["tenant_id"] = json;
+        }
+
         await _applicationManager.CreateAsync(descriptor, cancellationToken);
     }
 
@@ -75,6 +84,7 @@ public class OpenIddictClientManagerAdapter : IOAuthClientManager
         string displayName,
         IEnumerable<string> redirectUris,
         IEnumerable<string> allowedScopes,
+        Guid? tenantId = null,
         CancellationToken cancellationToken = default)
     {
         var application = await _applicationManager.FindByClientIdAsync(clientId, cancellationToken);
@@ -83,9 +93,29 @@ public class OpenIddictClientManagerAdapter : IOAuthClientManager
             throw new InvalidOperationException($"OAuth client with ID '{clientId}' not found.");
         }
 
-        // Populate descriptor from existing application
+        // Populate descriptor from existing application and verify tenant metadata
         var descriptor = new OpenIddictApplicationDescriptor();
         await _applicationManager.PopulateAsync(descriptor, application, cancellationToken);
+
+        // If tenantId provided, verify the application belongs to the tenant
+        if (tenantId.HasValue)
+        {
+            if (!descriptor.Properties.TryGetValue("tenant_id", out var tval))
+                throw new InvalidOperationException($"OAuth client '{clientId}' not found for tenant.");
+
+            // Properties store JsonElement values when populated by OpenIddict; handle both string and JsonElement
+            if (tval is System.Text.Json.JsonElement je)
+            {
+                var s = je.ValueKind == System.Text.Json.JsonValueKind.String ? je.GetString() : je.ToString();
+                if (s != tenantId.Value.ToString())
+                    throw new InvalidOperationException($"OAuth client '{clientId}' not found for tenant.");
+            }
+            else
+            {
+                if (tval.ToString() != tenantId.Value.ToString())
+                    throw new InvalidOperationException($"OAuth client '{clientId}' not found for tenant.");
+            }
+        }
 
         // Update properties
         descriptor.DisplayName = displayName;
@@ -111,27 +141,71 @@ public class OpenIddictClientManagerAdapter : IOAuthClientManager
         }
 
         // Apply updates
+        if (tenantId.HasValue)
+        {
+            descriptor.Properties["tenant_id"] = System.Text.Json.JsonSerializer.SerializeToElement(tenantId.Value.ToString());
+        }
+
         await _applicationManager.UpdateAsync(application, descriptor, cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task DeleteClientAsync(
         string clientId,
+        Guid? tenantId = null,
         CancellationToken cancellationToken = default)
     {
         var application = await _applicationManager.FindByClientIdAsync(clientId, cancellationToken);
-        if (application != null)
+        if (application == null)
+            return;
+
+        if (tenantId.HasValue)
         {
-            await _applicationManager.DeleteAsync(application, cancellationToken);
+            var descriptor = new OpenIddictApplicationDescriptor();
+            await _applicationManager.PopulateAsync(descriptor, application, cancellationToken);
+            if (!descriptor.Properties.TryGetValue("tenant_id", out var tval))
+                return; // Not the tenant's application, nothing to delete
+
+            if (tval is System.Text.Json.JsonElement je)
+            {
+                var s = je.ValueKind == System.Text.Json.JsonValueKind.String ? je.GetString() : je.ToString();
+                if (s != tenantId.Value.ToString())
+                    return; // Not this tenant
+            }
+            else
+            {
+                if (tval.ToString() != tenantId.Value.ToString())
+                    return; // Not this tenant
+            }
         }
+
+        await _applicationManager.DeleteAsync(application, cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task<bool> ExistsAsync(
         string clientId,
+        Guid? tenantId = null,
         CancellationToken cancellationToken = default)
     {
         var application = await _applicationManager.FindByClientIdAsync(clientId, cancellationToken);
-        return application != null;
+        if (application == null)
+            return false;
+
+        if (!tenantId.HasValue)
+            return true;
+
+        var descriptor = new OpenIddictApplicationDescriptor();
+        await _applicationManager.PopulateAsync(descriptor, application, cancellationToken);
+        if (!descriptor.Properties.TryGetValue("tenant_id", out var tval))
+            return false;
+
+        if (tval is System.Text.Json.JsonElement je)
+        {
+            var s = je.ValueKind == System.Text.Json.JsonValueKind.String ? je.GetString() : je.ToString();
+            return s == tenantId.Value.ToString();
+        }
+
+        return tval.ToString() == tenantId.Value.ToString();
     }
 }

@@ -47,11 +47,20 @@ const LoginPage = () => {
         try {
           const response = await api.post('/api/auth/establish-session', { returnUrl });
           console.log('Session established, redirecting to:', response.data.returnUrl);
-          console.log('response.data:', response.data);
-          console.log('About to redirect with window.location.href =', response.data.returnUrl);
-          
-          // Use full URL to avoid React Router interception
-          const fullUrl = `https://localhost:44330${response.data.returnUrl}`;
+
+          // Build full redirect URL using configured API host (or current origin)
+          const serverBase = import.meta.env.VITE_API_URL || window.location.origin;
+          // If serverBase is a relative or lacks protocol, fall back to current origin
+          const serverOrigin = (() => {
+            try {
+              const u = new URL(serverBase);
+              return u.origin;
+            } catch {
+              return window.location.origin;
+            }
+          })();
+
+          const fullUrl = `${serverOrigin}${response.data.returnUrl}`;
           console.log('Full redirect URL:', fullUrl);
           window.location.href = fullUrl;
           return;

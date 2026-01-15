@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import authService from '../../services/authService';
+import { clearTenantOverride } from '../../services/tenant';
 
 const AuthContext = createContext(null);
 
@@ -26,13 +27,14 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
-  const register = async (email, password, confirmPassword, firstName, lastName) => {
-    const data = await authService.register(email, password, confirmPassword, firstName, lastName);
+  const register = async (email, password, confirmPassword, firstName, lastName, organizationName, organizationSubdomain) => {
+    const data = await authService.register(email, password, confirmPassword, firstName, lastName, organizationName, organizationSubdomain);
     return data;
   };
 
   const logout = () => {
     authService.logout();
+    clearTenantOverride(); // Clear tenant on logout
     setUser(null);
   };
 

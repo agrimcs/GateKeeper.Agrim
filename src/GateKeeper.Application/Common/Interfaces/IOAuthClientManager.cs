@@ -23,6 +23,7 @@ public interface IOAuthClientManager
         string? clientSecret,
         IEnumerable<string> redirectUris,
         IEnumerable<string> allowedScopes,
+        Guid? tenantId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -38,6 +39,7 @@ public interface IOAuthClientManager
         string displayName,
         IEnumerable<string> redirectUris,
         IEnumerable<string> allowedScopes,
+        Guid? tenantId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -47,6 +49,7 @@ public interface IOAuthClientManager
     /// <param name="cancellationToken">Cancellation token</param>
     Task DeleteClientAsync(
         string clientId,
+        Guid? tenantId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -57,5 +60,6 @@ public interface IOAuthClientManager
     /// <returns>True if client exists, false otherwise</returns>
     Task<bool> ExistsAsync(
         string clientId,
+        Guid? tenantId = null,
         CancellationToken cancellationToken = default);
 }

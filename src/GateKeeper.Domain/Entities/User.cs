@@ -19,10 +19,15 @@ public class User : AggregateRoot
     public DateTime CreatedAt { get; private set; }
     public DateTime? LastLoginAt { get; private set; }
     
+    // Multi-tenancy
+    public Guid OrganizationId { get; private set; }
+    public virtual Organization Organization { get; set; } = null!;
+    public bool IsOrganizationAdmin { get; private set; } = false;
+    
     // EF Core constructor
     private User() { }
     
-    private User(Guid id, Email email, string passwordHash, string firstName, string lastName)
+    private User(Guid id, Email email, string passwordHash, string firstName, string lastName, Guid organizationId, bool isOrganizationAdmin = false)
     {
         Id = id;
         Email = email;
@@ -30,6 +35,8 @@ public class User : AggregateRoot
         FirstName = firstName;
         LastName = lastName;
         CreatedAt = DateTime.UtcNow;
+        OrganizationId = organizationId;
+        IsOrganizationAdmin = isOrganizationAdmin;
     }
     
     /// <summary>
@@ -40,7 +47,9 @@ public class User : AggregateRoot
         Email email, 
         string passwordHash, 
         string firstName, 
-        string lastName)
+        string lastName,
+        Guid organizationId,
+        bool isOrganizationAdmin = false)
     {
         if (string.IsNullOrWhiteSpace(firstName) || firstName.Length > 100)
             throw new DomainException("First name must be between 1 and 100 characters");
@@ -48,11 +57,25 @@ public class User : AggregateRoot
         if (string.IsNullOrWhiteSpace(lastName) || lastName.Length > 100)
             throw new DomainException("Last name must be between 1 and 100 characters");
         
-        var user = new User(Guid.NewGuid(), email, passwordHash, firstName, lastName);
+        if (organizationId == Guid.Empty)
+            throw new DomainException("Organization ID is required");
+        
+        var user = new User(Guid.NewGuid(), email, passwordHash, firstName, lastName, organizationId, isOrganizationAdmin);
         
         user.AddDomainEvent(new UserRegisteredEvent(user.Id, email.Value));
         
         return user;
+    }
+
+    // Compatibility overload: register without organizationId (legacy callers/tests)
+    public static User Register(
+        Email email,
+        string passwordHash,
+        string firstName,
+        string lastName)
+    {
+        // Create user with empty Guid; callers should migrate to tenant-aware registration.
+        return Register(email, passwordHash, firstName, lastName, Guid.Empty, false);
     }
     
     public void UpdateProfile(string firstName, string lastName)
@@ -75,5 +98,34 @@ public class User : AggregateRoot
     {
         LastLoginAt = DateTime.UtcNow;
         AddDomainEvent(new UserAuthenticatedEvent(Id, DateTime.UtcNow));
+    }
+    
+    /// <summary>
+    /// Promotes user to organization admin role
+    /// </summary>
+    public void PromoteToOrganizationAdmin()
+    {
+        IsOrganizationAdmin = true;
+    }
+    
+    /// <summary>
+    /// Demotes user from organization admin role
+    /// </summary>
+    public void DemoteFromOrganizationAdmin()
+    {
+        IsOrganizationAdmin = false;
+    }
+
+    /// <summary>
+    /// Sets the OrganizationId for legacy/seed scenarios where a user was created
+    /// without an organization. Intended to be called by infrastructure when a
+    /// tenant context is available.
+    /// </summary>
+    public void SetOrganizationId(Guid organizationId)
+    {
+        if (organizationId == Guid.Empty)
+            throw new DomainException("Organization ID cannot be empty");
+
+        OrganizationId = organizationId;
     }
 }

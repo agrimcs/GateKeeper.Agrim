@@ -21,7 +21,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         // Database configuration
-        services.AddDbContext<ApplicationDbContext>(options =>
+        services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
         {
             var connectionString = configuration.GetConnectionString("DefaultConnection");
 
@@ -48,8 +48,11 @@ public static class DependencyInjection
                 warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
             });
 
-            // OpenIddict requires DbContext to be configured
-            options.UseOpenIddict();
+            // Note: Do not call UseInternalServiceProvider here — allowing EF Core to
+            // build its internal service provider ensures required Entity Framework
+            // services (like relational provider services) are registered correctly.
+            // The ApplicationDbContext constructor will receive the tenant service
+            // via the scoped DI registration when resolved at runtime.
         });
 
         // OpenIddict configuration
@@ -100,6 +103,27 @@ public static class DependencyInjection
         // Register repositories
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
+        services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+
+        // Tenant support
+        services.AddHttpContextAccessor();
+        // Concrete TenantService registration
+        services.AddScoped<GateKeeper.Infrastructure.Services.TenantService>();
+        // Register a fallback NullTenantService for scenarios where tenant resolution
+        // isn't available (unit tests or ad-hoc construction). The real TenantService
+        // (which depends on IHttpContextAccessor) is also registered below in server.
+        services.AddSingleton<GateKeeper.Application.Common.NullTenantService>();
+        services.AddScoped<GateKeeper.Application.Common.ITenantService>(sp =>
+        {
+            // Prefer the infrastructure TenantService if available (registered in host)
+            var httpAccessor = sp.GetService<Microsoft.AspNetCore.Http.IHttpContextAccessor>();
+            if (httpAccessor != null)
+            {
+                return sp.GetRequiredService<GateKeeper.Infrastructure.Services.TenantService>();
+            }
+
+            return sp.GetRequiredService<GateKeeper.Application.Common.NullTenantService>();
+        });
 
         // Register Unit of Work
         services.AddScoped<IUnitOfWork, UnitOfWork>();

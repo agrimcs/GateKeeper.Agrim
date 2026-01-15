@@ -18,17 +18,30 @@ public class UserService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
+    private readonly GateKeeper.Application.Common.ITenantService _tenantService;
 
     public UserService(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IUnitOfWork unitOfWork,
-        IJwtTokenGenerator jwtTokenGenerator)
+        IJwtTokenGenerator jwtTokenGenerator,
+        GateKeeper.Application.Common.ITenantService tenantService)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _unitOfWork = unitOfWork;
         _jwtTokenGenerator = jwtTokenGenerator;
+        _tenantService = tenantService;
+    }
+
+    // Backwards-compatible constructor for tests/legacy code that don't provide a tenant service
+    public UserService(
+        IUserRepository userRepository,
+        IPasswordHasher passwordHasher,
+        IUnitOfWork unitOfWork,
+        IJwtTokenGenerator jwtTokenGenerator)
+        : this(userRepository, passwordHasher, unitOfWork, jwtTokenGenerator, new GateKeeper.Application.Common.NullTenantService())
+    {
     }
 
     /// <summary>
@@ -50,8 +63,13 @@ public class UserService
         // Hash password using infrastructure service
         var passwordHash = _passwordHasher.HashPassword(dto.Password);
 
+        // Determine tenant context
+        var tenantId = _tenantService.GetCurrentTenantId();
+        if (tenantId == null)
+            throw new InvalidOperationException("Tenant context is required to register a user");
+
         // Create user aggregate using domain factory method
-        var user = User.Register(email, passwordHash, dto.FirstName, dto.LastName);
+        var user = User.Register(email, passwordHash, dto.FirstName, dto.LastName, tenantId.Value);
 
         // Persist to database
         await _userRepository.AddAsync(user, cancellationToken);
@@ -87,12 +105,13 @@ public class UserService
         user.RecordLogin();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Generate JWT token
-        var token = _jwtTokenGenerator.GenerateToken(
+        // Generate JWT token WITH org claim from user's OrganizationId
+        var token = _jwtTokenGenerator.GenerateTokenWithOrg(
             user.Id,
             user.Email.Value,
             user.FirstName,
-            user.LastName
+            user.LastName,
+            user.OrganizationId
         );
 
         return new LoginResponseDto
@@ -161,7 +180,8 @@ public class UserService
             FirstName = user.FirstName,
             LastName = user.LastName,
             CreatedAt = user.CreatedAt,
-            LastLoginAt = user.LastLoginAt
+            LastLoginAt = user.LastLoginAt,
+            OrganizationId = user.OrganizationId
         };
     }
 }

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getTenantFromHost } from './tenant';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5294';
 
@@ -18,6 +19,14 @@ api.interceptors.request.use(
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Add tenant header and query param if present
+    const tenant = getTenantFromHost();
+    if (tenant) {
+      config.headers['X-Tenant'] = tenant;
+      // Add as query param for localhost (middleware checks this)
+      config.params = config.params || {};
+      config.params.tenant = tenant;
     }
     return config;
   },

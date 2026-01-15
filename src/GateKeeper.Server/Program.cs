@@ -120,6 +120,10 @@ namespace GateKeeper.Server
 
             app.UseRouting();
 
+            // Resolve tenant from the incoming request (subdomain) so downstream
+            // components (auth, controllers, services) can access the tenant context.
+            app.UseMiddleware<TenantResolutionMiddleware>();
+
             app.UseAuthentication(); // Must come before Authorization
             app.UseAuthorization();
 

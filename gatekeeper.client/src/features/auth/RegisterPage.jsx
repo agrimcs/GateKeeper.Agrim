@@ -9,6 +9,8 @@ const RegisterPage = () => {
     confirmPassword: '',
     firstName: '',
     lastName: '',
+    organizationName: '',
+    organizationSubdomain: '',
   });
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
@@ -18,10 +20,21 @@ const RegisterPage = () => {
   const navigate = useNavigate();
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+    
+    // Auto-generate subdomain from organization name if user hasn't manually edited subdomain
+    if (name === 'organizationName' && !formData.organizationSubdomain) {
+      const subdomain = value.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single
+        .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+      setFormData(prev => ({ ...prev, organizationSubdomain: subdomain }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -35,6 +48,24 @@ const RegisterPage = () => {
       return;
     }
 
+    // Validate organization details
+    if (!formData.organizationName.trim()) {
+      setError('Organization name is required');
+      return;
+    }
+    
+    if (!formData.organizationSubdomain.trim()) {
+      setError('Organization subdomain is required');
+      return;
+    }
+
+    // Validate subdomain format
+    const subdomainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+    if (!subdomainRegex.test(formData.organizationSubdomain)) {
+      setError('Subdomain must contain only lowercase letters, numbers, and hyphens (no spaces or special characters)');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -43,7 +74,9 @@ const RegisterPage = () => {
         formData.password,
         formData.confirmPassword,
         formData.firstName,
-        formData.lastName
+        formData.lastName,
+        formData.organizationName,
+        formData.organizationSubdomain
       );
       navigate('/login');
     } catch (err) {
@@ -59,9 +92,12 @@ const RegisterPage = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+    <div className="flex items-center justify-center min-h-screen bg-gray-100 py-8">
       <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center">Create Account</h2>
+        <h2 className="text-2xl font-bold mb-2 text-center">Create Account</h2>
+        <p className="text-sm text-gray-600 mb-6 text-center">
+          Register your organization and create your admin account
+        </p>
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -70,9 +106,48 @@ const RegisterPage = () => {
         )}
 
         <form onSubmit={handleSubmit}>
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded">
+            <h3 className="font-semibold text-gray-800 mb-3">Organization Details</h3>
+            
+            <div className="mb-3">
+              <label htmlFor="organizationName" className="block text-gray-700 font-medium mb-2">
+                Organization Name *
+              </label>
+              <input
+                id="organizationName"
+                name="organizationName"
+                type="text"
+                value={formData.organizationName}
+                onChange={handleChange}
+                required
+                placeholder="Acme Corporation"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="mb-0">
+              <label htmlFor="organizationSubdomain" className="block text-gray-700 font-medium mb-2">
+                Subdomain *
+              </label>
+              <input
+                id="organizationSubdomain"
+                name="organizationSubdomain"
+                type="text"
+                value={formData.organizationSubdomain}
+                onChange={handleChange}
+                required
+                placeholder="acme"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-xs text-gray-600 mt-1">
+                Your organization URL: <strong>{formData.organizationSubdomain || 'your-subdomain'}.yourdomain.com</strong>
+              </p>
+            </div>
+          </div>
+
           <div className="mb-4">
             <label htmlFor="firstName" className="block text-gray-700 font-medium mb-2">
-              First Name
+              First Name *
             </label>
             <input
               id="firstName"
@@ -92,7 +167,7 @@ const RegisterPage = () => {
 
           <div className="mb-4">
             <label htmlFor="lastName" className="block text-gray-700 font-medium mb-2">
-              Last Name
+              Last Name *
             </label>
             <input
               id="lastName"
@@ -112,7 +187,7 @@ const RegisterPage = () => {
 
           <div className="mb-4">
             <label htmlFor="email" className="block text-gray-700 font-medium mb-2">
-              Email
+              Email *
             </label>
             <input
               id="email"
@@ -132,7 +207,7 @@ const RegisterPage = () => {
 
           <div className="mb-4">
             <label htmlFor="password" className="block text-gray-700 font-medium mb-2">
-              Password
+              Password *
             </label>
             <input
               id="password"
@@ -152,7 +227,7 @@ const RegisterPage = () => {
 
           <div className="mb-6">
             <label htmlFor="confirmPassword" className="block text-gray-700 font-medium mb-2">
-              Confirm Password
+              Confirm Password *
             </label>
             <input
               id="confirmPassword"
@@ -175,7 +250,7 @@ const RegisterPage = () => {
             disabled={loading}
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-400"
           >
-            {loading ? 'Creating account...' : 'Register'}
+            {loading ? 'Creating organization...' : 'Create Organization & Register'}
           </button>
         </form>
 

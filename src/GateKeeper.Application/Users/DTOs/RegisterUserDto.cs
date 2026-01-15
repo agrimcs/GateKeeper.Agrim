@@ -10,4 +10,8 @@ public record RegisterUserDto
     public string ConfirmPassword { get; init; } = string.Empty;
     public string FirstName { get; init; } = string.Empty;
     public string LastName { get; init; } = string.Empty;
+    
+    // Organization details for new organization creation
+    public string? OrganizationName { get; init; }
+    public string? OrganizationSubdomain { get; init; }
 }

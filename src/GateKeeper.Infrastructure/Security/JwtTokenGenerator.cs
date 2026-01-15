@@ -63,6 +63,45 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    public string GenerateTokenWithOrg(Guid userId, string email, string firstName, string lastName, Guid organizationId)
+    {
+        // Get JWT settings from configuration
+        var issuer = _configuration["Jwt:Issuer"] ?? "GateKeeper";
+        var audience = _configuration["Jwt:Audience"] ?? "GateKeeper";
+        var expirationMinutes = int.Parse(_configuration["Jwt:ExpirationMinutes"] ?? "60");
+
+        // Create signing credentials
+        var credentials = new SigningCredentials(_key, SecurityAlgorithms.HmacSha256);
+
+        // Create claims INCLUDING organization
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, email),
+            new Claim(JwtRegisteredClaimNames.GivenName, firstName),
+            new Claim(JwtRegisteredClaimNames.FamilyName, lastName),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Email, email),
+            new Claim(ClaimTypes.Name, $"{firstName} {lastName}"),
+            new Claim(ClaimTypes.GivenName, firstName),
+            new Claim(ClaimTypes.Surname, lastName),
+            new Claim("org", organizationId.ToString())  // ← Organization claim for multi-tenancy
+        };
+
+        // Create token
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(expirationMinutes),
+            signingCredentials: credentials
+        );
+
+        // Return serialized token
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     public string GenerateRefreshToken()
     {
         var randomBytes = new byte[64];

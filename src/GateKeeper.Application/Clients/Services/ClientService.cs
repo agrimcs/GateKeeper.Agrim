@@ -18,17 +18,30 @@ public class ClientService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IOAuthClientManager _oauthClientManager;
+    private readonly GateKeeper.Application.Common.ITenantService _tenantService;
 
     public ClientService(
         IClientRepository clientRepository,
         IPasswordHasher passwordHasher,
         IUnitOfWork unitOfWork,
-        IOAuthClientManager oauthClientManager)
+        IOAuthClientManager oauthClientManager,
+        GateKeeper.Application.Common.ITenantService tenantService)
     {
         _clientRepository = clientRepository;
         _passwordHasher = passwordHasher;
         _unitOfWork = unitOfWork;
         _oauthClientManager = oauthClientManager;
+        _tenantService = tenantService;
+    }
+
+    // Backwards-compatible constructor for tests/legacy code that don't provide a tenant service
+    public ClientService(
+        IClientRepository clientRepository,
+        IPasswordHasher passwordHasher,
+        IUnitOfWork unitOfWork,
+        IOAuthClientManager oauthClientManager)
+        : this(clientRepository, passwordHasher, unitOfWork, oauthClientManager, new GateKeeper.Application.Common.NullTenantService())
+    {
     }
 
     /// <summary>
@@ -43,14 +56,19 @@ public class ClientService
         // Generate unique client ID
         var clientId = GenerateClientId(dto.DisplayName);
 
+        // Determine tenant context
+        var tenantId = _tenantService.GetCurrentTenantId();
+        if (tenantId == null)
+            throw new InvalidOperationException("Tenant context is required to register a client");
+
         // Check if client ID already exists in domain storage
         if (await _clientRepository.ExistsAsync(clientId, cancellationToken))
         {
             clientId = $"{clientId}-{Guid.NewGuid().ToString()[..8]}";
         }
 
-        // Check if client ID already exists in OAuth server
-        if (await _oauthClientManager.ExistsAsync(clientId, cancellationToken))
+        // Check if client ID already exists in OAuth server (scoped to tenant)
+        if (await _oauthClientManager.ExistsAsync(clientId, tenantId, cancellationToken))
         {
             clientId = $"{clientId}-{Guid.NewGuid().ToString()[..8]}";
         }
@@ -62,6 +80,8 @@ public class ClientService
 
         Client client;
         string? plainTextSecret = null;
+
+        
 
         if (dto.Type == ClientType.Confidential)
         {
@@ -77,6 +97,7 @@ public class ClientService
                 clientId,
                 hashedSecret,
                 ownerId,
+                tenantId.Value,
                 redirectUris,
                 dto.AllowedScopes);
         }
@@ -87,6 +108,7 @@ public class ClientService
                 dto.DisplayName,
                 clientId,
                 ownerId,
+                tenantId.Value,
                 redirectUris,
                 dto.AllowedScopes);
         }
@@ -95,7 +117,7 @@ public class ClientService
         await _clientRepository.AddAsync(client, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Register with OAuth server (OpenIddict via adapter)
+        // Register with OAuth server (OpenIddict via adapter), include tenant id
         await _oauthClientManager.RegisterClientAsync(
             clientId: client.ClientId,
             displayName: client.DisplayName,
@@ -103,6 +125,7 @@ public class ClientService
             clientSecret: plainTextSecret,
             redirectUris: client.RedirectUris.Select(u => u.Value),
             allowedScopes: client.AllowedScopes,
+            tenantId: tenantId,
             cancellationToken: cancellationToken);
 
         return MapToResponseDto(client, plainTextSecret);
@@ -203,6 +226,7 @@ public class ClientService
             displayName: client.DisplayName,
             redirectUris: client.RedirectUris.Select(u => u.Value),
             allowedScopes: client.AllowedScopes,
+            tenantId: _tenantService.GetCurrentTenantId(),
             cancellationToken: cancellationToken);
 
         return MapToResponseDto(client);
@@ -228,7 +252,7 @@ public class ClientService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Delete from OAuth server
-        await _oauthClientManager.DeleteClientAsync(client.ClientId, cancellationToken);
+        await _oauthClientManager.DeleteClientAsync(client.ClientId, _tenantService.GetCurrentTenantId(), cancellationToken);
     }
 
     private static string GenerateClientId(string displayName)

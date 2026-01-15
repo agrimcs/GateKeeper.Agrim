@@ -22,6 +22,17 @@ public static class ApplicationDbContextSeed
             return;
         }
 
+        // Seed default organization
+        var defaultOrg = new Organization
+        {
+            Id = Guid.NewGuid(),
+            Name = "Default Organization",
+            Subdomain = "default",
+            SettingsJson = System.Text.Json.JsonSerializer.Serialize(new OrganizationSettings { AllowSelfSignup = true })
+        };
+
+        await context.Organizations.AddAsync(defaultOrg);
+
         // Seed admin user
         var adminEmail = Email.Create("admin@gatekeeper.local");
         var adminPassword = passwordHasher.HashPassword("Admin123!@#");
@@ -30,7 +41,8 @@ public static class ApplicationDbContextSeed
             adminEmail,
             adminPassword,
             "Admin",
-            "User"
+            "User",
+            defaultOrg.Id
         );
 
         await context.Users.AddAsync(adminUser);
@@ -43,7 +55,8 @@ public static class ApplicationDbContextSeed
             testEmail,
             testPassword,
             "Test",
-            "User"
+            "User",
+            defaultOrg.Id
         );
 
         await context.Users.AddAsync(testUser);
@@ -53,6 +66,7 @@ public static class ApplicationDbContextSeed
             "Demo Public App",
             "demo-public-app",
             adminUser.Id,
+            defaultOrg.Id,
             new List<RedirectUri>
             {
                 RedirectUri.Create("https://oauth.pstmn.io/v1/callback"), // Postman OAuth
@@ -74,6 +88,7 @@ public static class ApplicationDbContextSeed
             "demo-confidential-app",
             hashedSecret,
             adminUser.Id,
+            defaultOrg.Id,
             new List<RedirectUri>
             {
                 RedirectUri.Create("https://localhost:5001/callback")

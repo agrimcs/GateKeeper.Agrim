@@ -19,7 +19,7 @@ public class UserRepositoryTests : IDisposable
             .Options;
 
         _context = new ApplicationDbContext(options);
-        _repository = new UserRepository(_context);
+        _repository = new UserRepository(_context, new GateKeeper.Application.Common.NullTenantService());
     }
 
     [Fact]

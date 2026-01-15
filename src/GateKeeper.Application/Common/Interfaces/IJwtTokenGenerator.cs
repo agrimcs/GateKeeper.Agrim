@@ -18,6 +18,17 @@ public interface IJwtTokenGenerator
     string GenerateToken(Guid userId, string email, string firstName, string lastName);
     
     /// <summary>
+    /// Generates a JWT token for the specified user WITH organization claim.
+    /// </summary>
+    /// <param name="userId">The user's unique identifier</param>
+    /// <param name="email">The user's email address</param>
+    /// <param name="firstName">The user's first name</param>
+    /// <param name="lastName">The user's last name</param>
+    /// <param name="organizationId">The user's organization ID</param>
+    /// <returns>A JWT token string</returns>
+    string GenerateTokenWithOrg(Guid userId, string email, string firstName, string lastName, Guid organizationId);
+    
+    /// <summary>
     /// Generates a refresh token for token renewal.
     /// </summary>
     /// <returns>A refresh token string</returns>

@@ -18,6 +18,7 @@ public class Client : AggregateRoot
     public string DisplayName { get; private set; } = string.Empty;
     public ClientType Type { get; private set; }
     public Guid OwnerId { get; private set; }
+    public Guid OrganizationId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     
     private readonly List<RedirectUri> _redirectUris = new();
@@ -35,6 +36,7 @@ public class Client : AggregateRoot
         string displayName,
         ClientType type,
         Guid ownerId,
+        Guid organizationId,
         ClientSecret? secret = null)
     {
         Id = id;
@@ -42,6 +44,7 @@ public class Client : AggregateRoot
         DisplayName = displayName;
         Type = type;
         OwnerId = ownerId;
+        OrganizationId = organizationId;
         Secret = secret;
         CreatedAt = DateTime.UtcNow;
     }
@@ -56,6 +59,7 @@ public class Client : AggregateRoot
         string clientId,
         ClientSecret secret,
         Guid ownerId,
+        Guid organizationId,
         IEnumerable<RedirectUri> redirectUris,
         IEnumerable<string> scopes)
     {
@@ -65,7 +69,7 @@ public class Client : AggregateRoot
         if (string.IsNullOrWhiteSpace(clientId))
             throw new DomainException("Client ID is required");
         
-        var client = new Client(Guid.NewGuid(), clientId, displayName, ClientType.Confidential, ownerId, secret);
+        var client = new Client(Guid.NewGuid(), clientId, displayName, ClientType.Confidential, ownerId, organizationId, secret);
         
         foreach (var uri in redirectUris)
             client._redirectUris.Add(uri);
@@ -77,6 +81,31 @@ public class Client : AggregateRoot
         
         return client;
     }
+
+    // Compatibility overload: older signature without organizationId (6 args)
+    public static Client CreateConfidential(
+        string displayName,
+        string clientId,
+        ClientSecret secret,
+        Guid ownerId,
+        IEnumerable<RedirectUri> redirectUris,
+        IEnumerable<string> scopes)
+    {
+        return CreateConfidential(displayName, clientId, secret, ownerId, Guid.Empty, redirectUris, scopes);
+    }
+
+    // Compatibility overload for older signature where organizationId was last
+    public static Client CreateConfidential(
+        string displayName,
+        string clientId,
+        ClientSecret secret,
+        Guid ownerId,
+        IEnumerable<RedirectUri> redirectUris,
+        IEnumerable<string> scopes,
+        Guid organizationId)
+    {
+        return CreateConfidential(displayName, clientId, secret, ownerId, organizationId, redirectUris, scopes);
+    }
     
     /// <summary>
     /// Factory method to create a public OAuth client (browser/mobile app).
@@ -87,6 +116,7 @@ public class Client : AggregateRoot
         string displayName,
         string clientId,
         Guid ownerId,
+        Guid organizationId,
         IEnumerable<RedirectUri> redirectUris,
         IEnumerable<string> scopes)
     {
@@ -96,7 +126,7 @@ public class Client : AggregateRoot
         if (string.IsNullOrWhiteSpace(clientId))
             throw new DomainException("Client ID is required");
         
-        var client = new Client(Guid.NewGuid(), clientId, displayName, ClientType.Public, ownerId);
+        var client = new Client(Guid.NewGuid(), clientId, displayName, ClientType.Public, ownerId, organizationId);
         
         foreach (var uri in redirectUris)
             client._redirectUris.Add(uri);
@@ -107,6 +137,29 @@ public class Client : AggregateRoot
         client.AddDomainEvent(new ClientRegisteredEvent(client.Id, client.ClientId));
         
         return client;
+    }
+
+    // Compatibility overload: older signature without organizationId (5 args)
+    public static Client CreatePublic(
+        string displayName,
+        string clientId,
+        Guid ownerId,
+        IEnumerable<RedirectUri> redirectUris,
+        IEnumerable<string> scopes)
+    {
+        return CreatePublic(displayName, clientId, ownerId, Guid.Empty, redirectUris, scopes);
+    }
+
+    // Compatibility overload for older signature where organizationId was last
+    public static Client CreatePublic(
+        string displayName,
+        string clientId,
+        Guid ownerId,
+        IEnumerable<RedirectUri> redirectUris,
+        IEnumerable<string> scopes,
+        Guid organizationId)
+    {
+        return CreatePublic(displayName, clientId, ownerId, organizationId, redirectUris, scopes);
     }
     
     public void AddRedirectUri(RedirectUri uri)
@@ -150,5 +203,18 @@ public class Client : AggregateRoot
     public bool IsOwnedBy(Guid userId)
     {
         return OwnerId == userId;
+    }
+
+    /// <summary>
+    /// Sets the OrganizationId for legacy/seed scenarios where a client was
+    /// created without an organization. Intended for infrastructure use when
+    /// a tenant context is available.
+    /// </summary>
+    public void SetOrganizationId(Guid organizationId)
+    {
+        if (organizationId == Guid.Empty)
+            throw new DomainException("Organization ID cannot be empty");
+
+        OrganizationId = organizationId;
     }
 }

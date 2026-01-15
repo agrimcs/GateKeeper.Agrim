@@ -80,6 +80,9 @@ public class AuthorizationController : ControllerBase
         identity.AddClaim(Claims.Name, $"{userProfile.FirstName} {userProfile.LastName}");
         identity.AddClaim(Claims.GivenName, userProfile.FirstName);
         identity.AddClaim(Claims.FamilyName, userProfile.LastName);
+        
+        // Add organization claim from user profile
+        identity.AddClaim("org", userProfile.OrganizationId.ToString());
 
         // Set requested scopes
         identity.SetScopes(request.GetScopes());

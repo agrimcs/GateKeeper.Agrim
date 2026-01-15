@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 
 const Navigation = () => {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, tenant } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -14,9 +14,14 @@ const Navigation = () => {
     <nav className="bg-blue-600 text-white shadow-lg">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="text-xl font-bold">
-            GateKeeper
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/" className="text-xl font-bold">
+              GateKeeper
+            </Link>
+            {tenant && (
+              <span className="text-sm bg-white text-blue-700 px-2 py-1 rounded">{tenant}</span>
+            )}
+          </div>
 
           <div className="flex items-center space-x-4">
             {isAuthenticated ? (

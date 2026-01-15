@@ -3,6 +3,8 @@ using GateKeeper.Domain.Interfaces;
 using GateKeeper.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 
+using GateKeeper.Application.Common;
+
 namespace GateKeeper.Infrastructure.Persistence.Repositories;
 
 /// <summary>
@@ -12,10 +14,12 @@ namespace GateKeeper.Infrastructure.Persistence.Repositories;
 public class UserRepository : IUserRepository
 {
     private readonly ApplicationDbContext _context;
+    private readonly ITenantService _tenantService;
 
-    public UserRepository(ApplicationDbContext context)
+    public UserRepository(ApplicationDbContext context, ITenantService tenantService)
     {
         _context = context;
+        _tenantService = tenantService;
     }
 
     public async Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -50,6 +54,17 @@ public class UserRepository : IUserRepository
 
     public async Task AddAsync(User user, CancellationToken cancellationToken = default)
     {
+        // If the user was created without an OrganizationId (legacy/seed),
+        // set it from the current tenant context when available.
+        if (user.OrganizationId == Guid.Empty)
+        {
+            var tenantId = _tenantService.GetCurrentTenantId();
+            if (tenantId.HasValue)
+            {
+                user.SetOrganizationId(tenantId.Value);
+            }
+        }
+
         await _context.Users.AddAsync(user, cancellationToken);
     }
 

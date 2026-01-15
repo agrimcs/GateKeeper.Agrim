@@ -2,6 +2,8 @@ using GateKeeper.Domain.Entities;
 using GateKeeper.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
+using GateKeeper.Application.Common;
+
 namespace GateKeeper.Infrastructure.Persistence.Repositories;
 
 /// <summary>
@@ -11,10 +13,12 @@ namespace GateKeeper.Infrastructure.Persistence.Repositories;
 public class ClientRepository : IClientRepository
 {
     private readonly ApplicationDbContext _context;
+    private readonly ITenantService _tenantService;
 
-    public ClientRepository(ApplicationDbContext context)
+    public ClientRepository(ApplicationDbContext context, ITenantService tenantService)
     {
         _context = context;
+        _tenantService = tenantService;
     }
 
     public async Task<Client?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -62,6 +66,17 @@ public class ClientRepository : IClientRepository
 
     public async Task AddAsync(Client client, CancellationToken cancellationToken = default)
     {
+        // If the client was created without an OrganizationId (legacy/seed),
+        // set it from the current tenant context when available.
+        if (client.OrganizationId == Guid.Empty)
+        {
+            var tenantId = _tenantService.GetCurrentTenantId();
+            if (tenantId.HasValue)
+            {
+                client.SetOrganizationId(tenantId.Value);
+            }
+        }
+
         await _context.Clients.AddAsync(client, cancellationToken);
     }
 
