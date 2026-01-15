@@ -41,30 +41,45 @@ namespace GateKeeper.Server
                               "https://localhost:5173",
                               "http://localhost:63461",
                               "https://localhost:63461",
-                              "https://localhost:63462") // Vite dev server (multiple ports)
+                              "https://localhost:63462",
+                              "http://localhost:8080") // Demo OAuth client
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();
                 });
             });
 
-            // JWT Authentication
-            builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
+            // JWT Authentication + Cookie Authentication
+            builder.Services.AddAuthentication(options =>
+            {
+                // Default to JWT for API endpoints
+                options.DefaultAuthenticateScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
                 {
-                    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                        ValidAudience = builder.Configuration["Jwt:Audience"],
-                        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-                            System.Text.Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"]!)),
-                        ClockSkew = TimeSpan.Zero
-                    };
-                });
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                    ValidAudience = builder.Configuration["Jwt:Audience"],
+                    IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
+                        System.Text.Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"]!)),
+                    ClockSkew = TimeSpan.Zero
+                };
+            })
+            .AddCookie(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme, options =>
+            {
+                options.LoginPath = "/api/auth/login-page";
+                options.ExpireTimeSpan = TimeSpan.FromHours(1);
+                options.SlidingExpiration = true;
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.Always;
+                options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+            });
 
             // Add authorization
             builder.Services.AddAuthorization();
@@ -111,6 +126,7 @@ namespace GateKeeper.Server
             app.MapControllers();
 
             // Fallback to React app for client-side routing
+            // This will serve index.html for any route that doesn't match an API endpoint
             app.MapFallbackToFile("/index.html");
 
             await app.RunAsync();

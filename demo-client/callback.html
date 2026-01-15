@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth Callback - GateKeeper Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status {
+            color: #666;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+
+        .success {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Processing OAuth Callback</h1>
+        <div class="spinner" id="spinner"></div>
+        <div class="status" id="status">Exchanging authorization code for tokens...</div>
+        <div id="message"></div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        // Utility function
+        function showError(message) {
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('status').style.display = 'none';
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = 'error';
+            messageDiv.innerHTML = `<strong>Error:</strong> ${message}<br><a href="/" class="btn">Return to Home</a>`;
+        }
+
+        function showSuccess(message) {
+            document.getElementById('spinner').style.display = 'none';
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'success';
+            statusDiv.textContent = message;
+        }
+
+        // Base64 URL encoding helper
+        function base64UrlEncode(arrayBuffer) {
+            const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+            return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+
+        // Main callback handler
+        async function handleCallback() {
+            try {
+                // Parse URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                const state = urlParams.get('state');
+                const error = urlParams.get('error');
+                const errorDescription = urlParams.get('error_description');
+
+                // Check for OAuth errors
+                if (error) {
+                    throw new Error(errorDescription || error);
+                }
+
+                // Validate code
+                if (!code) {
+                    throw new Error('No authorization code received');
+                }
+
+                console.log('[OAuth] Authorization code received:', code.substring(0, 20) + '...');
+
+                // Validate state (CSRF protection)
+                const storedState = sessionStorage.getItem('oauth_state');
+                if (state !== storedState) {
+                    throw new Error('Invalid state parameter - possible CSRF attack');
+                }
+                console.log('[OAuth] State validated successfully');
+
+                // Retrieve code_verifier
+                const codeVerifier = sessionStorage.getItem('code_verifier');
+                if (!codeVerifier) {
+                    throw new Error('Code verifier not found - please start login again');
+                }
+                console.log('[OAuth] Code verifier retrieved:', codeVerifier.substring(0, 20) + '...');
+
+                // Update status
+                document.getElementById('status').textContent = 'Exchanging code for tokens...';
+
+                // Exchange authorization code for tokens
+                const tokenResponse = await fetch(`${CONFIG.AUTHORITY}/connect/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        client_id: CONFIG.CLIENT_ID,
+                        code: code,
+                        redirect_uri: CONFIG.REDIRECT_URI,
+                        code_verifier: codeVerifier
+                    })
+                });
+
+                if (!tokenResponse.ok) {
+                    const errorData = await tokenResponse.json();
+                    throw new Error(errorData.error_description || 'Token exchange failed');
+                }
+
+                const tokens = await tokenResponse.json();
+                console.log('[OAuth] Tokens received successfully');
+                console.log('[OAuth] Access token:', tokens.access_token.substring(0, 20) + '...');
+                console.log('[OAuth] Token expires in:', tokens.expires_in, 'seconds');
+
+                // Store tokens securely (sessionStorage for demo purposes)
+                sessionStorage.setItem('access_token', tokens.access_token);
+                sessionStorage.setItem('refresh_token', tokens.refresh_token || '');
+                sessionStorage.setItem('expires_at', Date.now() + (tokens.expires_in * 1000));
+                sessionStorage.setItem('token_type', tokens.token_type);
+
+                // Clean up PKCE parameters
+                sessionStorage.removeItem('code_verifier');
+                sessionStorage.removeItem('oauth_state');
+
+                // Update status
+                document.getElementById('status').textContent = 'Fetching user information...';
+
+                // Fetch user info
+                const userInfoResponse = await fetch(`${CONFIG.AUTHORITY}/connect/userinfo`, {
+                    headers: {
+                        'Authorization': `Bearer ${tokens.access_token}`
+                    }
+                });
+
+                if (!userInfoResponse.ok) {
+                    throw new Error('Failed to fetch user information');
+                }
+
+                const userInfo = await userInfoResponse.json();
+                console.log('[OAuth] User info retrieved:', userInfo);
+
+                // Store user info
+                sessionStorage.setItem('user_info', JSON.stringify(userInfo));
+
+                // Show success
+                showSuccess('✅ Authentication successful! Redirecting...');
+
+                // Redirect back to main page
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1500);
+
+            } catch (error) {
+                console.error('[OAuth] Callback error:', error);
+                showError(error.message);
+            }
+        }
+
+        // Run on page load
+        window.addEventListener('DOMContentLoaded', handleCallback);
+    </script>
+</body>
+</html>

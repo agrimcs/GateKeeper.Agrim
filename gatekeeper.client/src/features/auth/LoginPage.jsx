@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import api from '../../services/api';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -8,9 +9,18 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams();
 
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const returnUrl = searchParams.get('returnUrl');
+
+  useEffect(() => {
+    console.log('LoginPage mounted');
+    console.log('Current URL:', window.location.href);
+    console.log('ReturnUrl from searchParams:', returnUrl);
+  }, [returnUrl]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,8 +28,44 @@ const LoginPage = () => {
     setValidationErrors({});
     setLoading(true);
 
+    console.log('=== STARTING LOGIN ===');
+    console.log('Login with returnUrl:', returnUrl);
+    console.log('returnUrl starts with /connect/authorize?', returnUrl?.startsWith('/connect/authorize'));
+
+    // Check OAuth flow BEFORE login
+    const isOAuthFlow = returnUrl && returnUrl.startsWith('/connect/authorize');
+    console.log('Is OAuth flow?', isOAuthFlow);
+
     try {
+      console.log('Calling login service...');
       await login(email, password);
+      console.log('Login successful!');
+      
+      // If returnUrl exists and starts with /connect/authorize, establish OAuth session
+      if (isOAuthFlow) {
+        console.log('Establishing OAuth session for returnUrl:', returnUrl);
+        try {
+          const response = await api.post('/api/auth/establish-session', { returnUrl });
+          console.log('Session established, redirecting to:', response.data.returnUrl);
+          console.log('response.data:', response.data);
+          console.log('About to redirect with window.location.href =', response.data.returnUrl);
+          
+          // Use full URL to avoid React Router interception
+          const fullUrl = `https://localhost:44330${response.data.returnUrl}`;
+          console.log('Full redirect URL:', fullUrl);
+          window.location.href = fullUrl;
+          return;
+        } catch (err) {
+          console.error('Session establishment error:', err);
+          const errorDetail = err.response?.data?.detail || err.response?.data?.message || err.message;
+          setError(`Failed to establish OAuth session: ${errorDetail}`);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      console.log('No OAuth flow, navigating to admin');
+      // Normal login - go to admin
       navigate('/admin/clients');
     } catch (err) {
       if (err.errors && Object.keys(err.errors).length > 0) {

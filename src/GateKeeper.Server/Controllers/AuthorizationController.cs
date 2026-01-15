@@ -1,7 +1,9 @@
 using GateKeeper.Application.Users.Services;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
@@ -15,13 +17,16 @@ public class AuthorizationController : ControllerBase
 {
     private readonly UserService _userService;
     private readonly IOpenIddictScopeManager _scopeManager;
+    private readonly IConfiguration _configuration;
 
     public AuthorizationController(
         UserService userService,
-        IOpenIddictScopeManager scopeManager)
+        IOpenIddictScopeManager scopeManager,
+        IConfiguration configuration)
     {
         _userService = userService;
         _scopeManager = scopeManager;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -36,22 +41,29 @@ public class AuthorizationController : ControllerBase
         var request = HttpContext.GetOpenIddictServerRequest() ??
             throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
 
-        // Get user from authenticated session
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        // Try to authenticate with cookie scheme first (for OAuth flows)
+        var cookieAuth = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        
+        string? userId = null;
+        
+        if (cookieAuth.Succeeded)
+        {
+            userId = cookieAuth.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+        else
+        {
+            // Fallback to JWT (for API access)
+            userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
         
         if (string.IsNullOrEmpty(userId))
         {
-            // Store OAuth request parameters and redirect to login
-            var returnUrl = $"/connect/authorize?{Request.QueryString}";
+            // User not authenticated - redirect to login
+            var returnUrl = Request.Path.Value + Request.QueryString.Value;
+            var clientAppUrl = _configuration["ClientApp:Url"] ?? "";
+            var loginUrl = $"{clientAppUrl}/login?returnUrl={Uri.EscapeDataString(returnUrl)}";
             
-            // For API, return challenge with JWT Bearer scheme
-            // In production with web UI, would redirect to login page
-            return Challenge(
-                authenticationSchemes: JwtBearerDefaults.AuthenticationScheme,
-                properties: new AuthenticationProperties
-                {
-                    RedirectUri = returnUrl
-                });
+            return Redirect(loginUrl);
         }
 
         var userGuid = Guid.Parse(userId);
@@ -120,6 +132,7 @@ public class AuthorizationController : ControllerBase
     /// </summary>
     [HttpGet("~/connect/userinfo")]
     [HttpPost("~/connect/userinfo")]
+    [Authorize(AuthenticationSchemes = OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)]
     public async Task<IActionResult> Userinfo()
     {
         var userId = User.FindFirst(Claims.Subject)?.Value;
@@ -140,5 +153,28 @@ public class AuthorizationController : ControllerBase
             given_name = userProfile.FirstName,
             family_name = userProfile.LastName
         });
+    }
+
+    /// <summary>
+    /// Logout Endpoint
+    /// Ends user session and redirects back to client
+    /// </summary>
+    [HttpGet("~/connect/logout")]
+    [HttpPost("~/connect/logout")]
+    public async Task<IActionResult> Logout()
+    {
+        var postLogoutRedirectUri = Request.Query["post_logout_redirect_uri"].ToString();
+
+        // Sign out from cookie authentication (clears OAuth session)
+        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+        // Redirect back to the client app
+        if (!string.IsNullOrEmpty(postLogoutRedirectUri))
+        {
+            return Redirect(postLogoutRedirectUri);
+        }
+
+        // Default redirect to React app login
+        return Redirect($"{_configuration["ClientApp:Url"]}/login");
     }
 }
