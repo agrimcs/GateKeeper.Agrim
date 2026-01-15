@@ -21,6 +21,7 @@ public class ClientServiceTests
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IOAuthClientManager> _oauthClientManagerMock;
     private readonly ClientService _clientService;
+    private readonly Guid _testOwnerId = Guid.NewGuid();
 
     public ClientServiceTests()
     {
@@ -78,7 +79,7 @@ public class ClientServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _clientService.RegisterClientAsync(dto);
+        var result = await _clientService.RegisterClientAsync(dto, _testOwnerId);
 
         // Assert
         result.Should().NotBeNull();
@@ -147,7 +148,7 @@ public class ClientServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _clientService.RegisterClientAsync(dto);
+        var result = await _clientService.RegisterClientAsync(dto, _testOwnerId);
 
         // Assert
         result.Should().NotBeNull();
@@ -212,7 +213,7 @@ public class ClientServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _clientService.RegisterClientAsync(dto);
+        var result = await _clientService.RegisterClientAsync(dto, _testOwnerId);
 
         // Assert
         result.Should().NotBeNull();
@@ -264,7 +265,7 @@ public class ClientServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _clientService.RegisterClientAsync(dto);
+        var result = await _clientService.RegisterClientAsync(dto, _testOwnerId);
 
         // Assert
         result.Should().NotBeNull();
@@ -314,7 +315,7 @@ public class ClientServiceTests
             .ThrowsAsync(new InvalidOperationException("OAuth registration failed"));
 
         // Act
-        Func<Task> act = async () => await _clientService.RegisterClientAsync(dto);
+        Func<Task> act = async () => await _clientService.RegisterClientAsync(dto, _testOwnerId);
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -361,7 +362,7 @@ public class ClientServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _clientService.RegisterClientAsync(dto);
+        var result = await _clientService.RegisterClientAsync(dto, _testOwnerId);
 
         // Assert
         result.ClientId.Should().Be("my-pp-123");
@@ -380,15 +381,16 @@ public class ClientServiceTests
         var client = Client.CreatePublic(
             "Test App",
             "test-app",
+            _testOwnerId,
             new List<RedirectUri> { redirectUri },
             new List<string> { "openid" });
 
         _clientRepositoryMock
-            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, _testOwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
 
         // Act
-        var result = await _clientService.GetClientByIdAsync(clientId);
+        var result = await _clientService.GetClientByIdAsync(clientId, _testOwnerId);
 
         // Assert
         result.Should().NotBeNull();
@@ -404,11 +406,29 @@ public class ClientServiceTests
         var clientId = Guid.NewGuid();
 
         _clientRepositoryMock
-            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, _testOwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Client?)null);
 
         // Act
-        Func<Task> act = async () => await _clientService.GetClientByIdAsync(clientId);
+        Func<Task> act = async () => await _clientService.GetClientByIdAsync(clientId, _testOwnerId);
+
+        // Assert
+        await act.Should().ThrowAsync<ClientNotFoundException>();
+    }
+
+    [Fact]
+    public async Task GetClientByIdAsync_WithWrongOwner_ShouldThrowClientNotFoundException()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var wrongOwnerId = Guid.NewGuid();
+
+        _clientRepositoryMock
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, wrongOwnerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Client?)null);
+
+        // Act
+        Func<Task> act = async () => await _clientService.GetClientByIdAsync(clientId, wrongOwnerId);
 
         // Assert
         await act.Should().ThrowAsync<ClientNotFoundException>();
@@ -427,6 +447,7 @@ public class ClientServiceTests
         var client = Client.CreatePublic(
             "Test App",
             clientIdString,
+            _testOwnerId,
             new List<RedirectUri> { redirectUri },
             new List<string> { "openid" });
 
@@ -470,16 +491,16 @@ public class ClientServiceTests
         var redirectUri = RedirectUri.Create("https://example.com/callback");
         var clients = new List<Client>
         {
-            Client.CreatePublic("App 1", "app-1", new List<RedirectUri> { redirectUri }, new List<string> { "openid" }),
-            Client.CreatePublic("App 2", "app-2", new List<RedirectUri> { redirectUri }, new List<string> { "openid" })
+            Client.CreatePublic("App 1", "app-1", _testOwnerId, new List<RedirectUri> { redirectUri }, new List<string> { "openid" }),
+            Client.CreatePublic("App 2", "app-2", _testOwnerId, new List<RedirectUri> { redirectUri }, new List<string> { "openid" })
         };
 
         _clientRepositoryMock
-            .Setup(x => x.GetAllAsync(0, 50, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetAllByOwnerAsync(_testOwnerId, 0, 50, It.IsAny<CancellationToken>()))
             .ReturnsAsync(clients);
 
         // Act
-        var result = await _clientService.GetAllClientsAsync();
+        var result = await _clientService.GetAllClientsAsync(_testOwnerId);
 
         // Assert
         result.Should().HaveCount(2);
@@ -494,19 +515,19 @@ public class ClientServiceTests
         var redirectUri = RedirectUri.Create("https://example.com/callback");
         var clients = new List<Client>
         {
-            Client.CreatePublic("App 3", "app-3", new List<RedirectUri> { redirectUri }, new List<string> { "openid" })
+            Client.CreatePublic("App 3", "app-3", _testOwnerId, new List<RedirectUri> { redirectUri }, new List<string> { "openid" })
         };
 
         _clientRepositoryMock
-            .Setup(x => x.GetAllAsync(10, 5, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetAllByOwnerAsync(_testOwnerId, 10, 5, It.IsAny<CancellationToken>()))
             .ReturnsAsync(clients);
 
         // Act
-        var result = await _clientService.GetAllClientsAsync(skip: 10, take: 5);
+        var result = await _clientService.GetAllClientsAsync(_testOwnerId, skip: 10, take: 5);
 
         // Assert
         result.Should().HaveCount(1);
-        _clientRepositoryMock.Verify(x => x.GetAllAsync(10, 5, It.IsAny<CancellationToken>()), Times.Once);
+        _clientRepositoryMock.Verify(x => x.GetAllByOwnerAsync(_testOwnerId, 10, 5, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion
@@ -522,6 +543,7 @@ public class ClientServiceTests
         var client = Client.CreatePublic(
             "Old Name",
             "test-app",
+            _testOwnerId,
             new List<RedirectUri> { redirectUri },
             new List<string> { "openid" });
 
@@ -532,7 +554,7 @@ public class ClientServiceTests
         };
 
         _clientRepositoryMock
-            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, _testOwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
 
         _unitOfWorkMock
@@ -549,7 +571,7 @@ public class ClientServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _clientService.UpdateClientAsync(clientId, updateDto);
+        var result = await _clientService.UpdateClientAsync(clientId, updateDto, _testOwnerId);
 
         // Assert
         result.Should().NotBeNull();
@@ -580,11 +602,42 @@ public class ClientServiceTests
         };
 
         _clientRepositoryMock
-            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, _testOwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Client?)null);
 
         // Act
-        Func<Task> act = async () => await _clientService.UpdateClientAsync(clientId, updateDto);
+        Func<Task> act = async () => await _clientService.UpdateClientAsync(clientId, updateDto, _testOwnerId);
+
+        // Assert
+        await act.Should().ThrowAsync<ClientNotFoundException>();
+
+        // Verify OAuth update was not called
+        _oauthClientManagerMock.Verify(x => x.UpdateClientAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<IEnumerable<string>>(),
+            It.IsAny<IEnumerable<string>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateClientAsync_WithWrongOwner_ShouldThrowClientNotFoundException()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var wrongOwnerId = Guid.NewGuid();
+        var updateDto = new UpdateClientDto
+        {
+            DisplayName = "New Name",
+            RedirectUris = new List<string> { "https://example.com/callback" }
+        };
+
+        _clientRepositoryMock
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, wrongOwnerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Client?)null);
+
+        // Act
+        Func<Task> act = async () => await _clientService.UpdateClientAsync(clientId, updateDto, wrongOwnerId);
 
         // Assert
         await act.Should().ThrowAsync<ClientNotFoundException>();
@@ -607,6 +660,7 @@ public class ClientServiceTests
         var client = Client.CreatePublic(
             "Old Name",
             "test-app",
+            _testOwnerId,
             new List<RedirectUri> { redirectUri },
             new List<string> { "openid" });
 
@@ -617,7 +671,7 @@ public class ClientServiceTests
         };
 
         _clientRepositoryMock
-            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, _testOwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
 
         _unitOfWorkMock
@@ -634,7 +688,7 @@ public class ClientServiceTests
             .ThrowsAsync(new InvalidOperationException("OAuth update failed"));
 
         // Act
-        Func<Task> act = async () => await _clientService.UpdateClientAsync(clientId, updateDto);
+        Func<Task> act = async () => await _clientService.UpdateClientAsync(clientId, updateDto, _testOwnerId);
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -651,6 +705,7 @@ public class ClientServiceTests
         var client = Client.CreatePublic(
             "Test App",
             "test-app",
+            _testOwnerId,
             new List<RedirectUri> { uri1, uri2 },
             new List<string> { "openid" });
 
@@ -665,7 +720,7 @@ public class ClientServiceTests
         };
 
         _clientRepositoryMock
-            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, _testOwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
 
         _unitOfWorkMock
@@ -682,7 +737,7 @@ public class ClientServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _clientService.UpdateClientAsync(clientId, updateDto);
+        var result = await _clientService.UpdateClientAsync(clientId, updateDto, _testOwnerId);
 
         // Assert
         result.RedirectUris.Should().HaveCount(2);
@@ -715,11 +770,12 @@ public class ClientServiceTests
         var client = Client.CreatePublic(
             "Test App",
             "test-app",
+            _testOwnerId,
             new List<RedirectUri> { redirectUri },
             new List<string> { "openid" });
 
         _clientRepositoryMock
-            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, _testOwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
 
         _clientRepositoryMock
@@ -735,7 +791,7 @@ public class ClientServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _clientService.DeleteClientAsync(clientId);
+        await _clientService.DeleteClientAsync(clientId, _testOwnerId);
 
         // Assert
         _clientRepositoryMock.Verify(x => x.DeleteAsync(client, It.IsAny<CancellationToken>()), Times.Once);
@@ -752,11 +808,33 @@ public class ClientServiceTests
         var clientId = Guid.NewGuid();
 
         _clientRepositoryMock
-            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, _testOwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Client?)null);
 
         // Act
-        Func<Task> act = async () => await _clientService.DeleteClientAsync(clientId);
+        Func<Task> act = async () => await _clientService.DeleteClientAsync(clientId, _testOwnerId);
+
+        // Assert
+        await act.Should().ThrowAsync<ClientNotFoundException>();
+        _clientRepositoryMock.Verify(x => x.DeleteAsync(It.IsAny<Client>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // Verify OAuth deletion was not called
+        _oauthClientManagerMock.Verify(x => x.DeleteClientAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteClientAsync_WithWrongOwner_ShouldThrowClientNotFoundException()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var wrongOwnerId = Guid.NewGuid();
+
+        _clientRepositoryMock
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, wrongOwnerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Client?)null);
+
+        // Act
+        Func<Task> act = async () => await _clientService.DeleteClientAsync(clientId, wrongOwnerId);
 
         // Assert
         await act.Should().ThrowAsync<ClientNotFoundException>();
@@ -775,11 +853,12 @@ public class ClientServiceTests
         var client = Client.CreatePublic(
             "Test App",
             "test-app",
+            _testOwnerId,
             new List<RedirectUri> { redirectUri },
             new List<string> { "openid" });
 
         _clientRepositoryMock
-            .Setup(x => x.GetByIdAsync(clientId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdAndOwnerAsync(clientId, _testOwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
 
         _clientRepositoryMock
@@ -795,7 +874,7 @@ public class ClientServiceTests
             .ThrowsAsync(new InvalidOperationException("OAuth deletion failed"));
 
         // Act
-        Func<Task> act = async () => await _clientService.DeleteClientAsync(clientId);
+        Func<Task> act = async () => await _clientService.DeleteClientAsync(clientId, _testOwnerId);
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -849,7 +928,7 @@ public class ClientServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _clientService.RegisterClientAsync(dto);
+        await _clientService.RegisterClientAsync(dto, _testOwnerId);
 
         // Assert
         capturedClient.Should().NotBeNull();

@@ -17,9 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GateKeeper.Domain\GateKeeper.Domain.csproj" />
-    <ProjectReference Include="..\GateKeeper.Application\GateKeeper.Application.csproj" />
-    <ProjectReference Include="..\GateKeeper.Infrastructure\GateKeeper.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\GateKeeper.Domain\GateKeeper.Domain.csproj" />
+    <ProjectReference Include="..\..\src\GateKeeper.Application\GateKeeper.Application.csproj" />
+    <ProjectReference Include="..\..\src\GateKeeper.Infrastructure\GateKeeper.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

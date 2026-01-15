@@ -4,7 +4,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <SpaRoot>..\gatekeeper.client</SpaRoot>
+    <!--<SpaRoot>..\..\..\ gatekeeper.client</SpaRoot>-->
+	<SpaRoot>$(MSBuildProjectDirectory)\..\..\gatekeeper.client</SpaRoot>
     <SpaProxyLaunchCommand>npm run dev</SpaProxyLaunchCommand>
     <SpaProxyServerUrl>https://localhost:63461</SpaProxyServerUrl>
   </PropertyGroup>
@@ -32,7 +33,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\gatekeeper.client\gatekeeper.client.esproj">
+    <ProjectReference Include="$(MSBuildProjectDirectory)\..\..\gatekeeper.client\gatekeeper.client.esproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
     <ProjectReference Include="..\GateKeeper.Application\GateKeeper.Application.csproj" />

@@ -13,6 +13,8 @@ namespace GateKeeper.Domain.Tests.Entities;
 /// </summary>
 public class ClientTests
 {
+    private readonly Guid _testOwnerId = Guid.NewGuid();
+
     [Fact]
     public void CreateConfidential_WithValidData_ShouldCreateClient()
     {
@@ -24,7 +26,7 @@ public class ClientTests
         var scopes = new[] { "openid", "profile", "email" };
 
         // Act
-        var client = Client.CreateConfidential(displayName, clientId, secret, redirectUris, scopes);
+        var client = Client.CreateConfidential(displayName, clientId, secret, _testOwnerId, redirectUris, scopes);
 
         // Assert
         client.Should().NotBeNull();
@@ -33,6 +35,7 @@ public class ClientTests
         client.DisplayName.Should().Be(displayName);
         client.Type.Should().Be(ClientType.Confidential);
         client.Secret.Should().Be(secret);
+        client.OwnerId.Should().Be(_testOwnerId);
         client.RedirectUris.Should().HaveCount(1);
         client.AllowedScopes.Should().HaveCount(3);
         client.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
@@ -48,7 +51,7 @@ public class ClientTests
         var scopes = new[] { "openid", "profile" };
 
         // Act
-        var client = Client.CreatePublic(displayName, clientId, redirectUris, scopes);
+        var client = Client.CreatePublic(displayName, clientId, _testOwnerId, redirectUris, scopes);
 
         // Assert
         client.Should().NotBeNull();
@@ -57,6 +60,7 @@ public class ClientTests
         client.DisplayName.Should().Be(displayName);
         client.Type.Should().Be(ClientType.Public);
         client.Secret.Should().BeNull();
+        client.OwnerId.Should().Be(_testOwnerId);
         client.RedirectUris.Should().HaveCount(1);
         client.AllowedScopes.Should().HaveCount(2);
     }
@@ -72,13 +76,13 @@ public class ClientTests
         var scopes = new[] { "openid" };
 
         // Act
-        var client = Client.CreateConfidential(displayName, clientId, secret, redirectUris, scopes);
+        var client = Client.CreateConfidential(displayName, clientId, secret, _testOwnerId, redirectUris, scopes);
 
         // Assert
         client.DomainEvents.Should().ContainSingle();
         var domainEvent = client.DomainEvents.First();
         domainEvent.Should().BeOfType<ClientRegisteredEvent>();
-        
+
         var clientRegisteredEvent = (ClientRegisteredEvent)domainEvent;
         clientRegisteredEvent.Id.Should().Be(client.Id);
         clientRegisteredEvent.ClientId.Should().Be(clientId);
@@ -96,7 +100,7 @@ public class ClientTests
         var scopes = new[] { "openid" };
 
         // Act
-        Action act = () => Client.CreateConfidential(invalidDisplayName, "client-123", secret, redirectUris, scopes);
+        Action act = () => Client.CreateConfidential(invalidDisplayName, "client-123", secret, _testOwnerId, redirectUris, scopes);
 
         // Assert
         act.Should().Throw<DomainException>()
@@ -115,7 +119,7 @@ public class ClientTests
         var scopes = new[] { "openid" };
 
         // Act
-        Action act = () => Client.CreateConfidential("Test App", invalidClientId, secret, redirectUris, scopes);
+        Action act = () => Client.CreateConfidential("Test App", invalidClientId, secret, _testOwnerId, redirectUris, scopes);
 
         // Assert
         act.Should().Throw<DomainException>()
@@ -129,6 +133,7 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Test App",
             "test-123",
+            _testOwnerId,
             new[] { RedirectUri.Create("https://test.com/callback1") },
             new[] { "openid" });
 
@@ -150,6 +155,7 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Test App",
             "test-123",
+            _testOwnerId,
             new[] { uri },
             new[] { "openid" });
 
@@ -170,6 +176,7 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Test App",
             "test-123",
+            _testOwnerId,
             new[] { uri1, uri2 },
             new[] { "openid" });
 
@@ -189,6 +196,7 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Test App",
             "test-123",
+            _testOwnerId,
             new[] { RedirectUri.Create("https://test.com/callback1") },
             new[] { "openid" });
 
@@ -210,6 +218,7 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Test App",
             "test-123",
+            _testOwnerId,
             new[] { RedirectUri.Create(uriString) },
             new[] { "openid" });
 
@@ -227,6 +236,7 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Test App",
             "test-123",
+            _testOwnerId,
             new[] { RedirectUri.Create("https://test.com/callback1") },
             new[] { "openid" });
 
@@ -244,6 +254,7 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Test App",
             "test-123",
+            _testOwnerId,
             new[] { RedirectUri.Create("https://test.com/callback") },
             new[] { "openid" });
 
@@ -261,6 +272,7 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Old Name",
             "test-123",
+            _testOwnerId,
             new[] { RedirectUri.Create("https://test.com/callback") },
             new[] { "openid" });
 
@@ -281,6 +293,7 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Test App",
             "test-123",
+            _testOwnerId,
             new[] { RedirectUri.Create("https://test.com/callback") },
             new[] { "openid" });
 
@@ -308,6 +321,7 @@ public class ClientTests
             "Test App",
             "test-123",
             ClientSecret.Generate(),
+            _testOwnerId,
             redirectUris,
             new[] { "openid" });
 
@@ -325,11 +339,51 @@ public class ClientTests
         var client = Client.CreatePublic(
             "Test App",
             "test-123",
+            _testOwnerId,
             new[] { RedirectUri.Create("https://test.com/callback") },
             scopes);
 
         // Assert
         client.AllowedScopes.Should().HaveCount(5);
         client.AllowedScopes.Should().Contain(scopes);
+    }
+
+    [Fact]
+    public void IsOwnedBy_WithCorrectOwner_ShouldReturnTrue()
+    {
+        // Arrange
+        var ownerId = Guid.NewGuid();
+        var client = Client.CreatePublic(
+            "Test App",
+            "test-123",
+            ownerId,
+            new[] { RedirectUri.Create("https://test.com/callback") },
+            new[] { "openid" });
+
+        // Act
+        var isOwned = client.IsOwnedBy(ownerId);
+
+        // Assert
+        isOwned.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsOwnedBy_WithDifferentOwner_ShouldReturnFalse()
+    {
+        // Arrange
+        var ownerId = Guid.NewGuid();
+        var differentOwnerId = Guid.NewGuid();
+        var client = Client.CreatePublic(
+            "Test App",
+            "test-123",
+            ownerId,
+            new[] { RedirectUri.Create("https://test.com/callback") },
+            new[] { "openid" });
+
+        // Act
+        var isOwned = client.IsOwnedBy(differentOwnerId);
+
+        // Assert
+        isOwned.Should().BeFalse();
     }
 }
